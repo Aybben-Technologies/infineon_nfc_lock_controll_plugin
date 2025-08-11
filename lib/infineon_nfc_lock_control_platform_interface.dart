@@ -1,6 +1,5 @@
+import 'package:infineon_nfc_lock_control/infineon_nfc_lock_control_method_channel.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-
-import 'infineon_nfc_lock_control_method_channel.dart'; // Ensure this import is correct
 
 abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
   InfineonNfcLockControlPlatform() : super(token: _token);
@@ -20,7 +19,20 @@ abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
     throw UnimplementedError('getPlatformVersion() has not been implemented.');
   }
 
-  // Ensure these methods return Future<bool>
+  Stream<double> lockLockStream({
+    required String userName,
+    required String password,
+  }) {
+    throw UnimplementedError('lockLockStream() has not been implemented.');
+  }
+
+  Stream<double> unlockLockStream({
+    required String userName,
+    required String password,
+  }) {
+    throw UnimplementedError('unlockLockStream() has not been implemented.');
+  }
+
   Future<bool> setupNewLock({
     required String userName,
     required String supervisorKey,
@@ -29,26 +41,12 @@ abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
     throw UnimplementedError('setupNewLock() has not been implemented.');
   }
 
-  Future<bool> unlockLock({
-    required String userName,
-    required String password,
-  }) {
-    throw UnimplementedError('unlockLock() has not been implemented.');
-  }
-
   Future<bool> changePassword({
     required String userName,
     required String supervisorKey,
     required String newPassword,
   }) {
     throw UnimplementedError('changePassword() has not been implemented.');
-  }
-
-  Future<bool> lockLock({
-    required String userName,
-    required String password,
-  }) {
-    throw UnimplementedError('lockLock() has not been implemented.');
   }
 
   Future<bool> lockPresent() {

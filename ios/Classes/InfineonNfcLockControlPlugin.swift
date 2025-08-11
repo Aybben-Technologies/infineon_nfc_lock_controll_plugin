@@ -3,20 +3,66 @@ import Flutter
 import SmackSDK
 import UIKit
 
-public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
+public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var lockApi: LockApi?
+  private var eventSink: FlutterEventSink?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
-
-    let channel = FlutterMethodChannel(
+    let methodChannel = FlutterMethodChannel(
       name: "infineon_nfc_lock_control", binaryMessenger: registrar.messenger())
+    let eventChannel = FlutterEventChannel(
+      name: "infineon_nfc_lock_control_stream", binaryMessenger: registrar.messenger())
     let instance = InfineonNfcLockControlPlugin()
-    registrar.addMethodCallDelegate(instance, channel: channel)
+    registrar.addMethodCallDelegate(instance, channel: methodChannel)
+    eventChannel.setStreamHandler(instance)
 
     let config = SmackConfig(logging: CombinedLogger(debugPrinter: DebugPrinter()))
     let client = SmackClient(config: config)
     let target = SmackTarget.device(client: client)
     instance.lockApi = LockApi(target: target, config: config)
+  }
+
+  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink)
+    -> FlutterError?
+  {
+    self.eventSink = events
+    guard let args = arguments as? [String: Any],
+      let method = args["method"] as? String
+    else {
+      return FlutterError(
+        code: "INVALID_ARGS", message: "Invalid arguments for stream listener", details: nil)
+    }
+
+    switch method {
+    case "unlockLock":
+      guard let userName = args["userName"] as? String,
+        let password = args["password"] as? String
+      else {
+        return FlutterError(
+          code: "INVALID_ARGS", message: "Missing userName or password for unlockLock stream",
+          details: nil)
+      }
+      unlockLock(userName: userName, password: password)
+    case "lockLock":
+      guard let userName = args["userName"] as? String,
+        let password = args["password"] as? String
+      else {
+        return FlutterError(
+          code: "INVALID_ARGS", message: "Missing userName or password for lockLock stream",
+          details: nil)
+      }
+      lockLock(userName: userName, password: password)
+    default:
+      return FlutterError(
+        code: "INVALID_METHOD", message: "Method not supported for streaming", details: nil)
+    }
+
+    return nil
+  }
+
+  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    self.eventSink = nil
+    return nil
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -34,7 +80,6 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
       }
     case "getPlatformVersion":
       result("iOS " + UIDevice.current.systemVersion)
-
     case "setupNewLock":
       guard let args = call.arguments as? [String: String],
         let userName = args["userName"],
@@ -46,7 +91,6 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
       }
       setupNewLock(
         userName: userName, supervisorKey: supervisorKey, newPassword: newPassword, result: result)
-
     case "changePassword":
       guard let args = call.arguments as? [String: String],
         let userName = args["userName"],
@@ -58,27 +102,6 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
       }
       changePassword(
         userName: userName, supervisorKey: supervisorKey, newPassword: newPassword, result: result)
-
-    case "unlockLock":
-      guard let args = call.arguments as? [String: String],
-        let userName = args["userName"],
-        let password = args["password"]
-      else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Missing args", details: nil))
-        return
-      }
-      unlockLock(userName: userName, password: password, result: result)
-
-    case "lockLock":
-      guard let args = call.arguments as? [String: String],
-        let userName = args["userName"],
-        let password = args["password"]
-      else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Missing args", details: nil))
-        return
-      }
-      lockLock(userName: userName, password: password, result: result)
-
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -112,7 +135,7 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
                 self.lockApi?.unlock(information: info) { unlockResult in
                   switch unlockResult {
                   case .success:
-                    result(true) // Change to true for success
+                    result(true)
                   case .failure(let err):
                     result(
                       FlutterError(
@@ -121,9 +144,12 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
                   }
                 }
               } else {
-                  result(
-                      FlutterError(code: "SET_KEY_NO_LOCKKEY", message: "Set lock key did not return completed state with LockKey", details: nil)
-                  )
+                result(
+                  FlutterError(
+                    code: "SET_KEY_NO_LOCKKEY",
+                    message: "Set lock key did not return completed state with LockKey",
+                    details: nil)
+                )
               }
             case .failure(let err):
               result(
@@ -160,7 +186,7 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
           self.lockApi?.setLockKey(setupInformation: setupInfo) { resultKey in
             switch resultKey {
             case .success:
-              result(true) // Change to true for success
+              result(true)
             case .failure(let err):
               result(
                 FlutterError(
@@ -182,7 +208,7 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
     }
   }
 
-  private func unlockLock(userName: String, password: String, result: @escaping FlutterResult) {
+  private func unlockLock(userName: String, password: String) {
     getLock { [weak self] res in
       guard let self = self else { return }
       switch res {
@@ -191,22 +217,49 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
         let keyRes = keyGen.generateKey(lockId: lock.id, password: password)
         switch keyRes {
         case .success(let key):
-          self.performAction(
-            lock: lock, userName: userName, key: key, action: .unlock, result: result)
+          let info = LockActionInformation(userName: userName, date: Date(), key: key)
+          self.lockApi?.unlock(
+            information: info,
+            stream: { result in
+              switch result {
+              case .success(let state):
+                if case .charging(let chargeLevel) = state {
+                  self.eventSink?(chargeLevel.percentage)
+                  print(chargeLevel.percentage)
+
+                } else if case .completed = state {
+                  self.eventSink?(1.0)
+                  self.eventSink?(FlutterEndOfEventStream)
+                  self.eventSink = nil
+                  print("completed")
+
+                }
+              case .failure(let err):
+                self.eventSink?(
+                  FlutterError(
+                    code: "UNLOCK_FAILED", message: err.localizedDescription, details: nil))
+                self.eventSink?(FlutterEndOfEventStream)
+                self.eventSink = nil
+              }
+            })
         case .failure(let err):
-          result(
+          self.eventSink?(
             FlutterError(
               code: "KEY_GEN_FAILED_UNLOCK", message: err.localizedDescription, details: nil))
+          self.eventSink?(FlutterEndOfEventStream)
+          self.eventSink = nil
         }
       case .failure(let err):
-        result(
+        self.eventSink?(
           FlutterError(
             code: "GET_LOCK_FAILED_UNLOCK", message: err.localizedDescription, details: nil))
+        self.eventSink?(FlutterEndOfEventStream)
+        self.eventSink = nil
       }
     }
   }
 
-  private func lockLock(userName: String, password: String, result: @escaping FlutterResult) {
+  private func lockLock(userName: String, password: String) {
     getLock { [weak self] res in
       guard let self = self else { return }
       switch res {
@@ -215,63 +268,40 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin {
         let keyRes = keyGen.generateKey(lockId: lock.id, password: password)
         switch keyRes {
         case .success(let key):
-          self.performAction(
-            lock: lock, userName: userName, key: key, action: .lock, result: result)
+          let info = LockActionInformation(userName: userName, date: Date(), key: key)
+          self.lockApi?.lock(
+            information: info,
+            stream: { result in
+              switch result {
+              case .success(let state):
+                if case .charging(let chargeLevel) = state {
+                  self.eventSink?(chargeLevel.percentage)
+                } else if case .completed = state {
+                  self.eventSink?(1.0)
+                  self.eventSink?(FlutterEndOfEventStream)
+                  self.eventSink = nil
+                }
+              case .failure(let err):
+                self.eventSink?(
+                  FlutterError(code: "LOCK_FAILED", message: err.localizedDescription, details: nil)
+                )
+                self.eventSink?(FlutterEndOfEventStream)
+                self.eventSink = nil
+              }
+            })
         case .failure(let err):
-          result(
+          self.eventSink?(
             FlutterError(
               code: "KEY_GEN_FAILED_LOCK", message: err.localizedDescription, details: nil))
+          self.eventSink?(FlutterEndOfEventStream)
+          self.eventSink = nil
         }
       case .failure(let err):
-        result(
+        self.eventSink?(
           FlutterError(
             code: "GET_LOCK_FAILED_LOCK", message: err.localizedDescription, details: nil))
-      }
-    }
-  }
-
-  private enum LockAction {
-    case unlock, lock
-  }
-
-  private func performAction(
-    lock: Lock, userName: String, key: [UInt8], action: LockAction, result: @escaping FlutterResult
-  ) {
-    let info = LockActionInformation(userName: userName, date: Date(), key: key)
-
-    switch action {
-    case .unlock:
-      self.lockApi?.unlock(information: info) { unlockResult in
-        switch unlockResult {
-        case .success:
-          print("Lock successfully unlocked.")
-          result(true) 
-        case .failure(let err):
-          print("Unlock error: \(err.localizedDescription)")
-          result(
-            FlutterError(
-              code: "UNLOCK_FAILED",
-              message: "Failed to unlock: \(err.localizedDescription)",
-              details: nil
-            ))
-        }
-      }
-
-    case .lock:
-      self.lockApi?.lock(information: info) { lockResult in
-        switch lockResult {
-        case .success:
-          print("Lock successfully locked.")
-          result(true) 
-        case .failure(let err):
-          print("Lock error: \(err.localizedDescription)")
-          result(
-            FlutterError(
-              code: "LOCK_FAILED",
-              message: "Failed to lock: \(err.localizedDescription)",
-              details: nil
-            ))
-        }
+        self.eventSink?(FlutterEndOfEventStream)
+        self.eventSink = nil
       }
     }
   }

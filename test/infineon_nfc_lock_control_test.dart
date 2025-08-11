@@ -3,15 +3,11 @@ import 'package:infineon_nfc_lock_control/infineon_nfc_lock_control.dart';
 import 'package:infineon_nfc_lock_control/infineon_nfc_lock_control_method_channel.dart';
 import 'package:infineon_nfc_lock_control/infineon_nfc_lock_control_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'dart:async';
 
-// Import the actual method channel implementation if you need to test it directly
-// import 'package:infineon_nfc_lock_control/infineon_nfc_lock_control_method_channel.dart';
-
-// This is your test entry point
 void main() {
   final InfineonNfcLockControlPlatform initialPlatform = InfineonNfcLockControlPlatform.instance;
 
-  // Mock implementation for testing
   group('InfineonNfcLockControl', () {
     test('$MethodChannelInfineonNfcLockControl is the default instance', () {
       expect(initialPlatform, isA<MethodChannelInfineonNfcLockControl>());
@@ -24,13 +20,10 @@ void main() {
       expect(await InfineonNfcLockControl.getPlatformVersion(), '42');
     });
 
-    // Add tests for other methods like setupNewLock, unlockLock, changePassword, lockLock, lockPresent
-    // Example for setupNewLock:
     testWidgets('setupNewLock returns true on success', (WidgetTester tester) async {
       MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
       InfineonNfcLockControlPlatform.instance = fakePlatform;
 
-      // Mock the setupNewLock to return true
       fakePlatform.mockSetupNewLockResult = true;
 
       final result = await InfineonNfcLockControl.setupNewLock(
@@ -41,39 +34,10 @@ void main() {
       expect(result, isTrue);
     });
 
-    testWidgets('unlockLock returns true on success', (WidgetTester tester) async {
+    testWidgets('changePassword returns true on success', (WidgetTester tester) async {
       MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
       InfineonNfcLockControlPlatform.instance = fakePlatform;
 
-      // Mock the unlockLock to return true
-      fakePlatform.mockUnlockLockResult = true;
-
-      final result = await InfineonNfcLockControl.unlockLock(
-        userName: 'testUser',
-        password: 'testPassword',
-      );
-      expect(result, isTrue);
-    });
-
-    testWidgets('lockLock returns true on success', (WidgetTester tester) async {
-      MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
-      InfineonNfcLockControlPlatform.instance = fakePlatform;
-
-      // Mock the lockLock to return true
-      fakePlatform.mockLockLockResult = true;
-
-      final result = await InfineonNfcLockControl.lockLock(
-        userName: 'testUser',
-        password: 'testPassword',
-      );
-      expect(result, isTrue);
-    });
-
-     testWidgets('changePassword returns true on success', (WidgetTester tester) async {
-      MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
-      InfineonNfcLockControlPlatform.instance = fakePlatform;
-
-      // Mock the changePassword to return true
       fakePlatform.mockChangePasswordResult = true;
 
       final result = await InfineonNfcLockControl.changePassword(
@@ -88,27 +52,56 @@ void main() {
       MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
       InfineonNfcLockControlPlatform.instance = fakePlatform;
 
-      // Mock the lockPresent to return true
       fakePlatform.mockLockPresentResult = true;
 
       final result = await InfineonNfcLockControl.lockPresent();
       expect(result, isTrue);
     });
+
+    testWidgets('unlockLockStream emits progress and completes successfully', (WidgetTester tester) async {
+      MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
+      InfineonNfcLockControlPlatform.instance = fakePlatform;
+      
+      final progressValues = <double>[];
+      final stream = InfineonNfcLockControl.unlockLockStream(
+        userName: 'testUser',
+        password: 'testPassword',
+      );
+
+      await for (final progress in stream) {
+        progressValues.add(progress);
+      }
+
+      expect(progressValues, equals([0.1, 0.5, 1.0]));
+    });
+
+    testWidgets('lockLockStream emits progress and completes successfully', (WidgetTester tester) async {
+      MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
+      InfineonNfcLockControlPlatform.instance = fakePlatform;
+      
+      final progressValues = <double>[];
+      final stream = InfineonNfcLockControl.lockLockStream(
+        userName: 'testUser',
+        password: 'testPassword',
+      );
+
+      await for (final progress in stream) {
+        progressValues.add(progress);
+      }
+
+      expect(progressValues, equals([0.1, 0.5, 1.0]));
+    });
   });
 }
 
-// Mock implementation class, extended to allow setting mock results
 class MockInfineonNfcLockControlPlatform
     with MockPlatformInterfaceMixin
     implements InfineonNfcLockControlPlatform {
 
   String? mockPlatformVersionResult = '42';
   bool mockSetupNewLockResult = false;
-  bool mockUnlockLockResult = false;
   bool mockChangePasswordResult = false;
-  bool mockLockLockResult = false;
   bool mockLockPresentResult = false;
-
 
   @override
   Future<String?> getPlatformVersion() => Future.value(mockPlatformVersionResult);
@@ -121,12 +114,6 @@ class MockInfineonNfcLockControlPlatform
   }) => Future.value(mockSetupNewLockResult);
 
   @override
-  Future<bool> unlockLock({
-    required String userName,
-    required String password,
-  }) => Future.value(mockUnlockLockResult);
-
-  @override
   Future<bool> changePassword({
     required String userName,
     required String supervisorKey,
@@ -134,11 +121,29 @@ class MockInfineonNfcLockControlPlatform
   }) => Future.value(mockChangePasswordResult);
 
   @override
-  Future<bool> lockLock({
-    required String userName,
-    required String password,
-  }) => Future.value(mockLockLockResult);
+  Future<bool> lockPresent() => Future.value(mockLockPresentResult);
 
   @override
-  Future<bool> lockPresent() => Future.value(mockLockPresentResult);
+  Stream<double> lockLockStream({
+    required String userName,
+    required String password,
+  }) async* {
+    yield 0.1;
+    await Future.delayed(const Duration(milliseconds: 10));
+    yield 0.5;
+    await Future.delayed(const Duration(milliseconds: 10));
+    yield 1.0;
+  }
+  
+  @override
+  Stream<double> unlockLockStream({
+    required String userName,
+    required String password,
+  }) async* {
+    yield 0.1;
+    await Future.delayed(const Duration(milliseconds: 10));
+    yield 0.5;
+    await Future.delayed(const Duration(milliseconds: 10));
+    yield 1.0;
+  }
 }

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:infineon_nfc_lock_control/infineon_nfc_lock_control.dart';
 
@@ -19,7 +22,8 @@ class _LockControlPageState extends State<LockControlPage> {
   final _changeUserNameController = TextEditingController();
 
   // State
-  String _status = 'Idle';
+  String _status = '0%';
+  double _progress = 0.0;
   bool _lockPresent = false;
   bool _userNameError = false;
   bool _supervisorKeyError = false;
@@ -41,10 +45,14 @@ class _LockControlPageState extends State<LockControlPage> {
     super.dispose();
   }
 
-  void _showValidationErrors({required bool userName, bool supervisorKey = false}) {
+  void _showValidationErrors({
+    required bool userName,
+    bool supervisorKey = false,
+  }) {
     setState(() {
       _userNameError = userName && _userNameController.text.isEmpty;
-      _supervisorKeyError = supervisorKey && _supervisorKeyController.text.isEmpty;
+      _supervisorKeyError =
+          supervisorKey && _supervisorKeyController.text.isEmpty;
     });
   }
 
@@ -56,9 +64,7 @@ class _LockControlPageState extends State<LockControlPage> {
         _status = present ? 'Lock detected!' : 'No lock detected.';
       });
     } catch (e) {
-      setState(() {
-        _status = 'Error checking lock presence: ${e.toString()}';
-      });
+      _animateErrorProgress(currentProgress: _progress);
     }
   }
 
@@ -79,9 +85,7 @@ class _LockControlPageState extends State<LockControlPage> {
         _status = success ? 'Lock setup successful!' : 'Lock setup failed.';
       });
     } catch (e) {
-      setState(() {
-        _status = 'Error setting up lock: ${e.toString()}';
-      });
+      _animateErrorProgress(currentProgress: _progress);
     }
   }
 
@@ -93,17 +97,27 @@ class _LockControlPageState extends State<LockControlPage> {
     if (_userNameError || _passwordError) return;
 
     try {
-      final success = await InfineonNfcLockControl.unlockLock(
+      setState(() {
+        _status = 'Unlocking lock...';
+        _progress = 0.0;
+      });
+
+      await for (var progress in InfineonNfcLockControl.unlockLockStream(
         userName: _userNameController.text,
         password: _passwordController.text,
-      );
+      )) {
+        setState(() {
+          _progress = min(progress / 100, 1.0);
+          _status = 'Unlocking: ${min(progress, 100.0).toStringAsFixed(0)}%';
+        });
+      }
+
       setState(() {
-        _status = success ? 'Lock unlocked successfully!' : 'Failed to unlock lock.';
+        _status = 'Lock unlocked successfully!';
+        _progress = 0.0;
       });
     } catch (e) {
-      setState(() {
-        _status = 'Error unlocking lock: ${e.toString()}';
-      });
+      _animateErrorProgress(currentProgress: _progress);
     }
   }
 
@@ -115,17 +129,27 @@ class _LockControlPageState extends State<LockControlPage> {
     if (_userNameError || _passwordError) return;
 
     try {
-      final success = await InfineonNfcLockControl.lockLock(
+      setState(() {
+        _status = 'Locking lock...';
+        _progress = 0.0;
+      });
+
+      await for (var progress in InfineonNfcLockControl.lockLockStream(
         userName: _userNameController.text,
         password: _passwordController.text,
-      );
+      )) {
+        setState(() {
+          _progress = min(progress / 100, 1.0);
+          _status = 'Locking: ${min(progress, 100.0).toStringAsFixed(0)}%';
+        });
+      }
+
       setState(() {
-        _status = success ? 'Lock locked successfully!' : 'Failed to lock lock.';
+        _status = 'Lock locked successfully!';
+        _progress = 0.0;
       });
     } catch (e) {
-      setState(() {
-        _status = 'Error locking lock: ${e.toString()}';
-      });
+      _animateErrorProgress(currentProgress: _progress);
     }
   }
 
@@ -137,7 +161,11 @@ class _LockControlPageState extends State<LockControlPage> {
       _changeSupervisorKeyError = supervisorKey.isEmpty;
       _changeNewPasswordError = _changeNewPasswordController.text.isEmpty;
     });
-    if (_changeUserNameError || _changeSupervisorKeyError || _changeNewPasswordError) return;
+    if (_changeUserNameError ||
+        _changeSupervisorKeyError ||
+        _changeNewPasswordError) {
+      return;
+    }
 
     try {
       final success = await InfineonNfcLockControl.changePassword(
@@ -146,13 +174,32 @@ class _LockControlPageState extends State<LockControlPage> {
         newPassword: _changeNewPasswordController.text,
       );
       setState(() {
-        _status = success ? 'Password changed successfully!' : 'Failed to change password.';
+        _status = success
+            ? 'Password changed successfully!'
+            : 'Failed to change password.';
       });
     } catch (e) {
-      setState(() {
-        _status = 'Error changing password: ${e.toString()}';
-      });
+      _animateErrorProgress(currentProgress: _progress);
     }
+  }
+
+  // Reset status to '0%' on error
+  void _animateErrorProgress({required double currentProgress}) {
+    double tempProgress = currentProgress;
+    Timer.periodic(const Duration(milliseconds: 30), (timer) {
+      if (tempProgress <= 0.0) {
+        timer.cancel();
+        setState(() {
+          _progress = 0.0;
+          _status = '0%';
+        });
+      } else {
+        setState(() {
+          tempProgress -= 0.05;
+          _progress = max(tempProgress, 0.0);
+        });
+      }
+    });
   }
 
   Widget _buildField({
@@ -187,37 +234,99 @@ class _LockControlPageState extends State<LockControlPage> {
       appBar: AppBar(title: const Text('NFC Lock Plugin Example')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_lockPresent ? '🔓 Lock detected!' : '🔒 No lock detected'),
-          const SizedBox(height: 8),
-          ElevatedButton(onPressed: _checkLockPresence, child: const Text('Check Lock Presence')),
-          const Divider(height: 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Status: $_status'),
+            if (_progress > 0.0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: LinearProgressIndicator(value: _progress),
+              ),
+            Text(_lockPresent ? '🔓 Lock detected!' : '🔒 No lock detected'),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _checkLockPresence,
+              child: const Text('Check Lock Presence'),
+            ),
+            const Divider(height: 32),
 
-          const Text('Setup New Lock', style: TextStyle(fontWeight: FontWeight.bold)),
-          _buildField(label: 'User Name', controller: _userNameController, showError: _userNameError),
-          _buildField(label: 'Supervisor Key', controller: _supervisorKeyController, obscure: true, showError: _supervisorKeyError),
-          _buildField(label: 'New Password', controller: _newPasswordController, obscure: true, showError: _newPasswordError),
-          ElevatedButton(onPressed: _setupNewLock, child: const Text('Setup Lock')),
+            const Text(
+              'Setup New Lock',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            _buildField(
+              label: 'User Name',
+              controller: _userNameController,
+              showError: _userNameError,
+            ),
+            _buildField(
+              label: 'Supervisor Key',
+              controller: _supervisorKeyController,
+              obscure: true,
+              showError: _supervisorKeyError,
+            ),
+            _buildField(
+              label: 'New Password',
+              controller: _newPasswordController,
+              obscure: true,
+              showError: _newPasswordError,
+            ),
+            ElevatedButton(
+              onPressed: _setupNewLock,
+              child: const Text('Setup Lock'),
+            ),
 
-          const Divider(height: 32),
-          const Text('Unlock Lock', style: TextStyle(fontWeight: FontWeight.bold)),
-          _buildField(label: 'Password', controller: _passwordController, obscure: true, showError: _passwordError),
-          ElevatedButton(onPressed: _unlockLock, child: const Text('Unlock')),
+            const Divider(height: 32),
+            const Text(
+              'Unlock Lock',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            _buildField(
+              label: 'Password',
+              controller: _passwordController,
+              obscure: true,
+              showError: _passwordError,
+            ),
+            ElevatedButton(onPressed: _unlockLock, child: const Text('Unlock')),
 
-          const Divider(height: 32),
-          const Text('Lock Lock', style: TextStyle(fontWeight: FontWeight.bold)),
-          ElevatedButton(onPressed: _lockLock, child: const Text('Lock')),
+            const Divider(height: 32),
+            const Text(
+              'Lock Lock',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            ElevatedButton(onPressed: _lockLock, child: const Text('Lock')),
 
-          const Divider(height: 32),
-          const Text('Change Password', style: TextStyle(fontWeight: FontWeight.bold)),
-          _buildField(label: 'User Name', controller: _changeUserNameController, showError: _changeUserNameError),
-          _buildField(label: 'Supervisor Key', controller: _changeSupervisorKeyController, obscure: true, showError: _changeSupervisorKeyError),
-          _buildField(label: 'New Password', controller: _changeNewPasswordController, obscure: true, showError: _changeNewPasswordError),
-          ElevatedButton(onPressed: _changePassword, child: const Text('Change Password')),
+            const Divider(height: 32),
+            const Text(
+              'Change Password',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            _buildField(
+              label: 'User Name',
+              controller: _changeUserNameController,
+              showError: _changeUserNameError,
+            ),
+            _buildField(
+              label: 'Supervisor Key',
+              controller: _changeSupervisorKeyController,
+              obscure: true,
+              showError: _changeSupervisorKeyError,
+            ),
+            _buildField(
+              label: 'New Password',
+              controller: _changeNewPasswordController,
+              obscure: true,
+              showError: _changeNewPasswordError,
+            ),
+            ElevatedButton(
+              onPressed: _changePassword,
+              child: const Text('Change Password'),
+            ),
 
-          const Divider(height: 32),
-          Text('Status: $_status'),
-        ]),
+            const Divider(height: 32),
+          ],
+        ),
       ),
     );
   }
