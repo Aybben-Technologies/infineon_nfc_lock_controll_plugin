@@ -25,6 +25,9 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.EventChannel.EventSink
+import io.flutter.plugin.common.EventChannel.StreamHandler
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import kotlin.coroutines.cancellation.CancellationException
@@ -34,10 +37,12 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
-/** InfineonNfcLockControlPlugin */
-class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
+class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, StreamHandler {
     private lateinit var channel: MethodChannel
+    private lateinit var eventChannel: EventChannel
+    private var eventSink: EventSink? = null
     private var applicationContext: Context? = null
     private var currentActivity: Activity? = null
 
@@ -45,12 +50,13 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
     private var nfcAdapterWrapper: NfcAdapterWrapper? = null
     private var registrationViewModel: RegistrationViewModel? = null
 
-    // --- NEW: Flag to track if the plugin is initialized ---
+    // Flag to track if the plugin is initialized ---
     private var isPluginInitialized: Boolean = false
 
     companion object {
         private const val TAG = "InfineonNfcLockPlugin"
         private const val CHANNEL = "infineon_nfc_lock_control"
+        private const val EVENT_CHANNEL = "infineon_nfc_lock_control_stream"
     }
     private var isLockPresent: Boolean = false
 
@@ -58,6 +64,8 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         applicationContext = flutterPluginBinding.applicationContext
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, CHANNEL)
         channel.setMethodCallHandler(this)
+        eventChannel = EventChannel(flutterPluginBinding.binaryMessenger, EVENT_CHANNEL)
+        eventChannel.setStreamHandler(this)
         Log.d(TAG, "onAttachedToEngine: Plugin channel setup.")
     }
 
@@ -139,19 +147,19 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         currentActivity = binding.activity
         binding.addOnNewIntentListener { intent ->
             handleNewIntent(intent)
-            true 
+            true
         }
         Log.d(TAG, "onReattachedToActivityForConfigChanges: Activity reattached.")
-        initializeSmackAndViewModel() 
+        initializeSmackAndViewModel()
     }
 
     override fun onDetachedFromActivity() {
         Log.d(TAG, "onDetachedFromActivity: Activity detached.")
         currentActivity = null
-        smackSdk = null 
+        smackSdk = null
         nfcAdapterWrapper = null
         registrationViewModel = null
-        isPluginInitialized = false 
+        isPluginInitialized = false
     }
 
     private fun handleNewIntent(intent: Intent) {
@@ -160,7 +168,7 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
             NfcAdapter.ACTION_TECH_DISCOVERED == intent.action ||
             NfcAdapter.ACTION_TAG_DISCOVERED == intent.action) {
 
-            smackSdk?.onNewIntent(intent) 
+            smackSdk?.onNewIntent(intent)
 
             val tag: Tag? =
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -179,7 +187,7 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
-        if (!isPluginInitialized && call.method != "getPlatformVersion") { 
+        if (!isPluginInitialized && call.method != "getPlatformVersion") {
              Log.e(TAG, "Plugin not initialized yet. Cannot process method call: ${call.method}")
              result.error(
                  "NOT_INITIALIZED",
@@ -245,7 +253,6 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
             "unlockLock" -> {
                 val password = call.argument<String>("password") ?: ""
                 val userName = call.argument<String>("userName") ?: ""
-
                 currentViewModel.unlockLock(
                         userName,
                         password,
@@ -257,7 +264,6 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
             "lockLock" -> {
                 val password = call.argument<String>("password") ?: ""
                 val userName = call.argument<String>("userName") ?: ""
-
                 currentViewModel.lockLock(
                         userName,
                         password,
@@ -273,12 +279,115 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         Log.d(TAG, "onDetachedFromEngine")
         channel.setMethodCallHandler(null)
+        eventChannel.setStreamHandler(null)
         applicationContext = null
+    }
+
+    override fun onListen(arguments: Any?, events: EventSink?) {
+        this.eventSink = events
+        val call = arguments as? Map<String, Any>
+        if (call == null) {
+            events?.error("INVALID_ARGS", "Invalid arguments for stream listener", null)
+            return
+        }
+        val method = call["method"] as? String
+        val userName = call["userName"] as? String ?: ""
+        val password = call["password"] as? String ?: ""
+        
+        // Ensure ViewModel is initialized before proceeding
+        val currentViewModel = registrationViewModel
+        if (currentViewModel == null) {
+            events?.error(
+                "NOT_INITIALIZED",
+                "registrationViewModel is not ready. Please ensure NFC is enabled and the app is in the foreground.",
+                null
+            )
+            return
+        }
+
+        when (method) {
+            "unlockLock" -> {
+                unlockLockStream(userName, password, currentViewModel)
+            }
+            "lockLock" -> {
+                lockLockStream(userName, password, currentViewModel)
+            }
+            else -> {
+                events?.error("INVALID_METHOD", "Method not supported for streaming", null)
+            }
+        }
+    }
+
+    override fun onCancel(arguments: Any?) {
+        this.eventSink = null
+        Log.d(TAG, "Event channel listener cancelled.")
+    }
+    
+    private fun unlockLockStream(userName: String, password: String, viewModel: RegistrationViewModel) {
+        viewModel.viewModelScope.launch(Dispatchers.IO) {
+            try {
+                for (i in 0..90 step 10) {
+                    delay(100) 
+                    currentActivity?.runOnUiThread {
+                         eventSink?.success(i.toDouble())
+                    }
+                }
+                
+                // Perform the actual unlock operation
+                viewModel.unlockLock(userName, password) { success ->
+                    currentActivity?.runOnUiThread {
+                        if (success) {
+                            eventSink?.success(100.0) // Final completion value
+                        } else {
+                            eventSink?.error("UNLOCK_FAILED", "Failed to unlock lock.", null)
+                        }
+                        eventSink?.endOfStream() 
+                    }
+                }
+            } catch (e: Exception) {
+                currentActivity?.runOnUiThread {
+                    eventSink?.error("UNLOCK_EXCEPTION", e.localizedMessage, null)
+                    eventSink?.endOfStream() 
+                }
+            }
+        }
+    }
+
+    // Simulates a streaming progress update and then performs the lock operation.
+    private fun lockLockStream(userName: String, password: String, viewModel: RegistrationViewModel) {
+        viewModel.viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Simulate progress updates from 0% to 90%
+                for (i in 0..90 step 10) {
+                    delay(100) 
+                    currentActivity?.runOnUiThread {
+                         eventSink?.success(i.toDouble())
+                    }
+                }
+                
+                // Perform the actual lock operation
+                viewModel.lockLock(userName, password) { success ->
+                    currentActivity?.runOnUiThread {
+                        if (success) {
+                            eventSink?.success(100.0) 
+                        } else {
+                            eventSink?.error("LOCK_FAILED", "Failed to lock lock.", null)
+                        }
+                        eventSink?.endOfStream() 
+                    }
+                }
+            } catch (e: Exception) {
+                currentActivity?.runOnUiThread {
+                    eventSink?.error("LOCK_EXCEPTION", e.localizedMessage, null)
+                    eventSink?.endOfStream() 
+                }
+            }
+        }
     }
 }
 
 class RegistrationViewModel(private val smackSdk: SmackSdk) : ViewModel() {
-    val setupResult = MutableLiveData<Boolean>() 
+    val setupResult = MutableLiveData<Boolean>()
 
     fun setupNewLock(
             userName: String,
