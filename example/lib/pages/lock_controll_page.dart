@@ -12,7 +12,6 @@ class LockControlPage extends StatefulWidget {
 }
 
 class _LockControlPageState extends State<LockControlPage> {
-  // Controllers
   final _userNameController = TextEditingController();
   final _supervisorKeyController = TextEditingController();
   final _newPasswordController = TextEditingController();
@@ -21,7 +20,6 @@ class _LockControlPageState extends State<LockControlPage> {
   final _changeSupervisorKeyController = TextEditingController();
   final _changeUserNameController = TextEditingController();
 
-  // State
   String _status = '0%';
   double _progress = 0.0;
   bool _lockPresent = false;
@@ -89,9 +87,6 @@ class _LockControlPageState extends State<LockControlPage> {
     }
   }
 
-  // pages/lock_controll_page.dart
-
-  // Proposed changes to the _unlockLock function
   Future<void> _unlockLock() async {
     _showValidationErrors(userName: true);
     setState(() {
@@ -116,7 +111,7 @@ class _LockControlPageState extends State<LockControlPage> {
         });
       }
 
-      success = true; // Stream completed without an error
+      success = true;
     } catch (e) {
       _animateErrorProgress(currentProgress: _progress);
     } finally {
@@ -132,7 +127,6 @@ class _LockControlPageState extends State<LockControlPage> {
     }
   }
 
-  // Proposed changes to the _lockLock function
   Future<void> _lockLock() async {
     _showValidationErrors(userName: true);
     setState(() {
@@ -157,7 +151,7 @@ class _LockControlPageState extends State<LockControlPage> {
         });
       }
 
-      success = true; // Stream completed without an error
+      success = true;
     } catch (e) {
       _animateErrorProgress(currentProgress: _progress);
     } finally {
