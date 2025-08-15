@@ -222,8 +222,6 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
             stream: { result in
               switch result {
               case .success(let state):
-                print("success")
-
                 if case .charging(let chargeLevel) = state {
                   self.eventSink?(chargeLevel.percentage)
                 } else if case .completed = state {
@@ -232,7 +230,6 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
                   self.eventSink = nil
                 }
               case .failure(let err):
-                print("error")
                 self.eventSink?(
                   FlutterError(
                     code: "UNLOCK_FAILED", message: err.localizedDescription, details: nil))
@@ -240,14 +237,12 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
               }
             })
         case .failure(let err):
-          print("error")
           self.eventSink?(
             FlutterError(
               code: "KEY_GEN_FAILED_UNLOCK", message: err.localizedDescription, details: nil))
           self.eventSink = nil
         }
       case .failure(let err):
-        print("error")
         self.eventSink?(
           FlutterError(
             code: "GET_LOCK_FAILED_UNLOCK", message: err.localizedDescription, details: nil))
