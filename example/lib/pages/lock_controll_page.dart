@@ -89,6 +89,9 @@ class _LockControlPageState extends State<LockControlPage> {
     }
   }
 
+  // pages/lock_controll_page.dart
+
+  // Proposed changes to the _unlockLock function
   Future<void> _unlockLock() async {
     _showValidationErrors(userName: true);
     setState(() {
@@ -96,6 +99,7 @@ class _LockControlPageState extends State<LockControlPage> {
     });
     if (_userNameError || _passwordError) return;
 
+    bool success = false;
     try {
       setState(() {
         _status = 'Unlocking lock...';
@@ -112,15 +116,23 @@ class _LockControlPageState extends State<LockControlPage> {
         });
       }
 
-      setState(() {
-        _status = 'Lock unlocked successfully!';
-        _progress = 0.0;
-      });
+      success = true; // Stream completed without an error
     } catch (e) {
       _animateErrorProgress(currentProgress: _progress);
+    } finally {
+      if (success) {
+        setState(() {
+          _status = 'Lock unlocked successfully!';
+          _progress = 0.0;
+        });
+      } else {
+        // Animate progress to 0% and reset status to '0%'
+        _animateErrorProgress(currentProgress: _progress);
+      }
     }
   }
 
+  // Proposed changes to the _lockLock function
   Future<void> _lockLock() async {
     _showValidationErrors(userName: true);
     setState(() {
@@ -128,6 +140,7 @@ class _LockControlPageState extends State<LockControlPage> {
     });
     if (_userNameError || _passwordError) return;
 
+    bool success = false;
     try {
       setState(() {
         _status = 'Locking lock...';
@@ -144,12 +157,19 @@ class _LockControlPageState extends State<LockControlPage> {
         });
       }
 
-      setState(() {
-        _status = 'Lock locked successfully!';
-        _progress = 0.0;
-      });
+      success = true; // Stream completed without an error
     } catch (e) {
       _animateErrorProgress(currentProgress: _progress);
+    } finally {
+      if (success) {
+        setState(() {
+          _status = 'Lock locked successfully!';
+          _progress = 0.0;
+        });
+      } else {
+        // Animate progress to 0% and reset status to '0%'
+        _animateErrorProgress(currentProgress: _progress);
+      }
     }
   }
 
