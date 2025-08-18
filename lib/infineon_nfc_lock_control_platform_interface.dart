@@ -6,7 +6,8 @@ abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static InfineonNfcLockControlPlatform _instance = MethodChannelInfineonNfcLockControl();
+  static InfineonNfcLockControlPlatform _instance =
+      MethodChannelInfineonNfcLockControl();
 
   static InfineonNfcLockControlPlatform get instance => _instance;
 
@@ -19,14 +20,14 @@ abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
     throw UnimplementedError('getPlatformVersion() has not been implemented.');
   }
 
-  Stream<double> lockLockStream({
+  Stream<dynamic> lockLockStream({
     required String userName,
     required String password,
   }) {
     throw UnimplementedError('lockLockStream() has not been implemented.');
   }
 
-  Stream<double> unlockLockStream({
+  Stream<dynamic> unlockLockStream({
     required String userName,
     required String password,
   }) {

@@ -212,8 +212,11 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
       guard let self = self else { return }
       switch res {
       case .success(let lock):
+        self.eventSink?(lock.id)
+
         let keyGen = KeyGenerator()
         let keyRes = keyGen.generateKey(lockId: lock.id, password: password)
+
         switch keyRes {
         case .success(let key):
           let info = LockActionInformation(userName: userName, date: Date(), key: key)
@@ -225,7 +228,7 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
                 if case .charging(let chargeLevel) = state {
                   self.eventSink?(chargeLevel.percentage)
                 } else if case .completed = state {
-                  self.eventSink?(1.0)
+                  self.eventSink?(100.0)
                   self.eventSink?(FlutterEndOfEventStream)
                   self.eventSink = nil
                 }
@@ -250,14 +253,15 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
       }
     }
   }
-
   private func lockLock(userName: String, password: String) {
     getLock { [weak self] res in
       guard let self = self else { return }
       switch res {
       case .success(let lock):
+        self.eventSink?(lock.id)
         let keyGen = KeyGenerator()
         let keyRes = keyGen.generateKey(lockId: lock.id, password: password)
+
         switch keyRes {
         case .success(let key):
           let info = LockActionInformation(userName: userName, date: Date(), key: key)
@@ -266,10 +270,12 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
             stream: { result in
               switch result {
               case .success(let state):
+                print("Locking Lock with ID: \(lock.id)")
+
                 if case .charging(let chargeLevel) = state {
                   self.eventSink?(chargeLevel.percentage)
                 } else if case .completed = state {
-                  self.eventSink?(1.0)
+                  self.eventSink?(100.0)
                   self.eventSink?(FlutterEndOfEventStream)
                   self.eventSink = nil
                 }

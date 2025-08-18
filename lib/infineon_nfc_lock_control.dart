@@ -5,7 +5,7 @@ class InfineonNfcLockControl {
     return InfineonNfcLockControlPlatform.instance.getPlatformVersion();
   }
 
-  static Stream<double> lockLockStream({
+  static Stream<dynamic> lockLockStream({
     required String userName,
     required String password,
   }) {
@@ -15,7 +15,7 @@ class InfineonNfcLockControl {
     );
   }
 
-  static Stream<double> unlockLockStream({
+  static Stream<dynamic> unlockLockStream({
     required String userName,
     required String password,
   }) {
@@ -31,9 +31,10 @@ class InfineonNfcLockControl {
     required String newPassword,
   }) {
     return InfineonNfcLockControlPlatform.instance.setupNewLock(
-        userName: userName,
-        supervisorKey: supervisorKey,
-        newPassword: newPassword);
+      userName: userName,
+      supervisorKey: supervisorKey,
+      newPassword: newPassword,
+    );
   }
 
   static Future<bool> changePassword({
@@ -42,9 +43,10 @@ class InfineonNfcLockControl {
     required String newPassword,
   }) {
     return InfineonNfcLockControlPlatform.instance.changePassword(
-        userName: userName,
-        supervisorKey: supervisorKey,
-        newPassword: newPassword);
+      userName: userName,
+      supervisorKey: supervisorKey,
+      newPassword: newPassword,
+    );
   }
 
   static Future<bool> lockPresent() {

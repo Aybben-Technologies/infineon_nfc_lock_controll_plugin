@@ -23,6 +23,7 @@ class _LockControlPageState extends State<LockControlPage> {
   String _status = '0%';
   double _progress = 0.0;
   bool _lockPresent = false;
+  int _lockId = 0;
   bool _userNameError = false;
   bool _supervisorKeyError = false;
   bool _changeSupervisorKeyError = false;
@@ -101,14 +102,20 @@ class _LockControlPageState extends State<LockControlPage> {
         _progress = 0.0;
       });
 
-      await for (var progress in InfineonNfcLockControl.unlockLockStream(
+      await for (var event in InfineonNfcLockControl.unlockLockStream(
         userName: _userNameController.text,
         password: _passwordController.text,
       )) {
-        setState(() {
-          _progress = min(progress / 100, 1.0);
-          _status = 'Unlocking: ${min(progress, 100.0).toStringAsFixed(0)}%';
-        });
+        if (event is int) {
+          setState(() {
+            _lockId = event;
+          });
+        } else if (event is double) {
+          setState(() {
+            _progress = min(event / 100, 1.0);
+            _status = 'Unlocking: ${min(event, 100.0).toStringAsFixed(0)}%';
+          });
+        }
       }
 
       success = true;
@@ -141,14 +148,20 @@ class _LockControlPageState extends State<LockControlPage> {
         _progress = 0.0;
       });
 
-      await for (var progress in InfineonNfcLockControl.lockLockStream(
+      await for (var event in InfineonNfcLockControl.lockLockStream(
         userName: _userNameController.text,
         password: _passwordController.text,
       )) {
-        setState(() {
-          _progress = min(progress / 100, 1.0);
-          _status = 'Locking: ${min(progress, 100.0).toStringAsFixed(0)}%';
-        });
+        if (event is int) {
+          setState(() {
+            _lockId = event;
+          });
+        } else if (event is double) {
+          setState(() {
+            _progress = min(event / 100, 1.0);
+            _status = 'Locking: ${min(event, 100.0).toStringAsFixed(0)}%';
+          });
+        }
       }
 
       success = true;
@@ -252,12 +265,17 @@ class _LockControlPageState extends State<LockControlPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Status: $_status'),
+
             if (_progress > 0.0)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: LinearProgressIndicator(value: _progress),
               ),
             Text(_lockPresent ? '🔓 Lock detected!' : '🔒 No lock detected'),
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text('Lock ID: $_lockId'),
+            ),
             const SizedBox(height: 8),
             ElevatedButton(
               onPressed: _checkLockPresence,

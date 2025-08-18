@@ -5,11 +5,11 @@ import 'package:flutter/services.dart';
 
 import 'infineon_nfc_lock_control_platform_interface.dart';
 
-class MethodChannelInfineonNfcLockControl extends InfineonNfcLockControlPlatform {
+class MethodChannelInfineonNfcLockControl
+    extends InfineonNfcLockControlPlatform {
   @visibleForTesting
   final methodChannel = const MethodChannel('infineon_nfc_lock_control');
 
-  // EventChannel for streaming lock/unlock progress
   @visibleForTesting
   final eventChannel = const EventChannel('infineon_nfc_lock_control_stream');
 
@@ -25,10 +25,11 @@ class MethodChannelInfineonNfcLockControl extends InfineonNfcLockControlPlatform
     required String newPassword,
   }) async {
     return await methodChannel.invokeMethod<bool>('setupNewLock', {
-      'userName': userName,
-      'supervisorKey': supervisorKey,
-      'newPassword': newPassword,
-    }) ?? false;
+          'userName': userName,
+          'supervisorKey': supervisorKey,
+          'newPassword': newPassword,
+        }) ??
+        false;
   }
 
   @override
@@ -38,10 +39,11 @@ class MethodChannelInfineonNfcLockControl extends InfineonNfcLockControlPlatform
     required String newPassword,
   }) async {
     return await methodChannel.invokeMethod<bool>('changePassword', {
-      'userName': userName,
-      'supervisorKey': supervisorKey,
-      'newPassword': newPassword,
-    }) ?? false;
+          'userName': userName,
+          'supervisorKey': supervisorKey,
+          'newPassword': newPassword,
+        }) ??
+        false;
   }
 
   @override
@@ -50,7 +52,7 @@ class MethodChannelInfineonNfcLockControl extends InfineonNfcLockControlPlatform
   }
 
   @override
-  Stream<double> unlockLockStream({
+  Stream<dynamic> unlockLockStream({
     required String userName,
     required String password,
   }) {
@@ -58,11 +60,11 @@ class MethodChannelInfineonNfcLockControl extends InfineonNfcLockControlPlatform
       'method': 'unlockLock',
       'userName': userName,
       'password': password,
-    }).map<double>((event) => event as double);
+    });
   }
 
   @override
-  Stream<double> lockLockStream({
+  Stream<dynamic> lockLockStream({
     required String userName,
     required String password,
   }) {
@@ -70,6 +72,6 @@ class MethodChannelInfineonNfcLockControl extends InfineonNfcLockControlPlatform
       'method': 'lockLock',
       'userName': userName,
       'password': password,
-    }).map<double>((event) => event as double);
+    });
   }
 }
