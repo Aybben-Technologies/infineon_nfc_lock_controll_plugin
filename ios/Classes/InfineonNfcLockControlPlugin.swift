@@ -111,60 +111,49 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
       completion(result)
     }
   }
-
   private func setupNewLock(
-    userName: String, supervisorKey: String, newPassword: String, result: @escaping FlutterResult
+    userName: String,
+    supervisorKey: String,
+    newPassword: String,
+    result: @escaping FlutterResult
   ) {
-    lockApi?.getLock(cancelIfNotSetup: true) { [weak self] lockResult in
+    getLock { [weak self] lockResult in
       guard let self = self else { return }
+
       switch lockResult {
       case .success(let lock):
         let keyGenerator = KeyGenerator()
         let genResult = keyGenerator.generateKey(lockId: lock.id, password: newPassword)
 
         switch genResult {
-        case .success(let key):
+        case .success:
           let setupInfo = LockSetupInformation(
-            userName: userName, date: Date(), supervisorKey: supervisorKey, password: newPassword)
+            userName: userName, date: Date(), supervisorKey: supervisorKey, password: newPassword
+          )
+
           self.lockApi?.setLockKey(setupInformation: setupInfo) { resultKey in
             switch resultKey {
-            case .success(let state):
-              if case .completed(let retrievedLockKey) = state {
-                let info = LockActionInformation(userName: userName, date: Date(), key: key)
-                self.lockApi?.unlock(information: info) { unlockResult in
-                  switch unlockResult {
-                  case .success:
-                    result(true)
-                  case .failure(let err):
-                    result(
-                      FlutterError(
-                        code: "UNLOCK_FAILED_AFTER_SETUP", message: err.localizedDescription,
-                        details: nil))
-                  }
-                }
-              } else {
-                result(
-                  FlutterError(
-                    code: "SET_KEY_NO_LOCKKEY",
-                    message: "Set lock key did not return completed state with LockKey",
-                    details: nil)
-                )
-              }
+            case .success:
+              result(true)
             case .failure(let err):
               result(
                 FlutterError(
-                  code: "SET_KEY_FAILED", message: err.localizedDescription, details: nil))
+                  code: "SET_KEY_FAILED", message: err.localizedDescription, details: nil)
+              )
             }
           }
+
         case .failure(let err):
           result(
-            FlutterError(code: "KEY_GEN_FAILED", message: err.localizedDescription, details: nil))
+            FlutterError(code: "KEY_GEN_FAILED", message: err.localizedDescription, details: nil)
+          )
         }
 
       case .failure(let err):
         result(
           FlutterError(
-            code: "GET_LOCK_FAILED_SETUP", message: err.localizedDescription, details: nil))
+            code: "GET_LOCK_FAILED_SETUP", message: err.localizedDescription, details: nil)
+        )
       }
     }
   }

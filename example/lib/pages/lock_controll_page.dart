@@ -84,7 +84,9 @@ class _LockControlPageState extends State<LockControlPage> {
         _status = success ? 'Lock setup successful!' : 'Lock setup failed.';
       });
     } catch (e) {
-      _animateErrorProgress(currentProgress: _progress);
+      setState(() {
+        _status = 'Error setting up lock: ${e.toString()}';
+      });
     }
   }
 
