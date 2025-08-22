@@ -52,4 +52,15 @@ class InfineonNfcLockControl {
   static Future<bool> lockPresent() {
     return InfineonNfcLockControlPlatform.instance.lockPresent();
   }
+  static Stream<dynamic> setupAndLockLockStream({
+    required String userName,
+    required String supervisorKey,
+    required String newPassword,
+  }) {
+    return InfineonNfcLockControlPlatform.instance.setupAndLockLockStream(
+      userName: userName,
+      supervisorKey: supervisorKey,
+      newPassword: newPassword,
+    );
+  }
 }

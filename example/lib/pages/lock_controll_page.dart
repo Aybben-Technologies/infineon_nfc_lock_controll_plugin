@@ -19,7 +19,9 @@ class _LockControlPageState extends State<LockControlPage> {
   final _changeNewPasswordController = TextEditingController();
   final _changeSupervisorKeyController = TextEditingController();
   final _changeUserNameController = TextEditingController();
-
+final _setupAndLockSupervisorKeyController = TextEditingController();
+  final _setupAndLockNewPasswordController = TextEditingController();
+  final _setupAndLockUserNameController = TextEditingController();
   String _status = '0%';
   double _progress = 0.0;
   bool _lockPresent = false;
@@ -31,8 +33,7 @@ class _LockControlPageState extends State<LockControlPage> {
   bool _passwordError = false;
   bool _newPasswordError = false;
   bool _changeNewPasswordError = false;
-
-  @override
+@override
   void dispose() {
     _userNameController.dispose();
     _supervisorKeyController.dispose();
@@ -41,6 +42,9 @@ class _LockControlPageState extends State<LockControlPage> {
     _changeNewPasswordController.dispose();
     _changeSupervisorKeyController.dispose();
     _changeUserNameController.dispose();
+    _setupAndLockSupervisorKeyController.dispose();
+    _setupAndLockNewPasswordController.dispose();
+    _setupAndLockUserNameController.dispose();
     super.dispose();
   }
 
@@ -54,7 +58,53 @@ class _LockControlPageState extends State<LockControlPage> {
           supervisorKey && _supervisorKeyController.text.isEmpty;
     });
   }
+Future<void> _setupAndLockLock() async {
+    setState(() {
+      _userNameError = _setupAndLockUserNameController.text.isEmpty;
+      _supervisorKeyError = _setupAndLockSupervisorKeyController.text.isEmpty;
+      _newPasswordError = _setupAndLockNewPasswordController.text.isEmpty;
+    });
 
+    if (_userNameError || _supervisorKeyError || _newPasswordError) return;
+
+    bool success = false;
+    try {
+      setState(() {
+        _status = 'Setting up and locking lock...';
+        _progress = 0.0;
+      });
+
+      await for (var event in InfineonNfcLockControl.setupAndLockLockStream(
+        userName: _setupAndLockUserNameController.text,
+        supervisorKey: _setupAndLockSupervisorKeyController.text,
+        newPassword: _setupAndLockNewPasswordController.text,
+      )) {
+        if (event is int) {
+          setState(() {
+            _lockId = event;
+          });
+        } else if (event is double) {
+          setState(() {
+            _progress = min(event / 100, 1.0);
+            _status =
+                'Setting up and locking: ${min(event, 100.0).toStringAsFixed(0)}%';
+          });
+        }
+      }
+      success = true;
+    } catch (e) {
+      _animateErrorProgress(currentProgress: _progress);
+    } finally {
+      if (success) {
+        setState(() {
+          _status = 'Lock setup and locked successfully!';
+          _progress = 0.0;
+        });
+      } else {
+        _animateErrorProgress(currentProgress: _progress);
+      }
+    }
+  }
   Future<void> _checkLockPresence() async {
     try {
       final present = await InfineonNfcLockControl.lockPresent();
@@ -284,7 +334,32 @@ class _LockControlPageState extends State<LockControlPage> {
               child: const Text('Check Lock Presence'),
             ),
             const Divider(height: 32),
-
+const Divider(height: 32),
+            const Text(
+              'Setup and Lock',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            _buildField(
+              label: 'User Name',
+              controller: _setupAndLockUserNameController,
+              showError: _userNameError,
+            ),
+            _buildField(
+              label: 'Supervisor Key',
+              controller: _setupAndLockSupervisorKeyController,
+              obscure: true,
+              showError: _supervisorKeyError,
+            ),
+            _buildField(
+              label: 'New Password',
+              controller: _setupAndLockNewPasswordController,
+              obscure: true,
+              showError: _newPasswordError,
+            ),
+            ElevatedButton(
+              onPressed: _setupAndLockLock,
+              child: const Text('Setup and Lock'),
+            ),
             const Text(
               'Setup New Lock',
               style: TextStyle(fontWeight: FontWeight.bold),

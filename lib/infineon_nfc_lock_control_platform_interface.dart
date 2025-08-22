@@ -53,4 +53,14 @@ abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
   Future<bool> lockPresent() {
     throw UnimplementedError('lockPresent() has not been implemented.');
   }
+
+  Stream<dynamic> setupAndLockLockStream({
+    required String userName,
+    required String supervisorKey,
+    required String newPassword,
+  }) {
+    throw UnimplementedError(
+      'setupAndLockLockStream() has not been implemented.',
+    );
+  }
 }

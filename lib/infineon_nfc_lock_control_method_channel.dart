@@ -74,4 +74,17 @@ class MethodChannelInfineonNfcLockControl
       'password': password,
     });
   }
+  @override
+  Stream<dynamic> setupAndLockLockStream({
+    required String userName,
+    required String supervisorKey,
+    required String newPassword,
+  }) {
+    return eventChannel.receiveBroadcastStream({
+      'method': 'setupAndLockLock',
+      'userName': userName,
+      'supervisorKey': supervisorKey,
+      'newPassword': newPassword,
+    });
+  }
 }

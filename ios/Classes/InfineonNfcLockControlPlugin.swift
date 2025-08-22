@@ -46,6 +46,18 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
           details: nil)
       }
       lockLock(userName: userName, password: password)
+    case "setupAndLockLock":
+      guard let userName = args["userName"] as? String,
+        let supervisorKey = args["supervisorKey"] as? String,
+        let newPassword = args["newPassword"] as? String
+      else {
+        return FlutterError(
+          code: "INVALID_ARGS",
+          message: "Missing userName, supervisorKey, or newPassword for setupAndLockLock stream",
+          details: nil)
+      }
+      setupAndLockLock(
+        userName: userName, supervisorKey: supervisorKey, newPassword: newPassword)
     default:
       return FlutterError(
         code: "INVALID_METHOD", message: "Method not supported for streaming", details: nil)
@@ -100,7 +112,86 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
       result(FlutterMethodNotImplemented)
     }
   }
+private func setupAndLockLock(userName: String, supervisorKey: String, newPassword: String) {
+    getLock { [weak self] lockResult in
+      guard let self = self else { return }
+      DispatchQueue.main.async { // Ensure all eventSink calls are on the main thread
+        switch lockResult {
+        case .success(let lock):
+          self.eventSink?(lock.id)
+          let keyGenerator = KeyGenerator()
+          let genResult = keyGenerator.generateKey(lockId: lock.id, password: newPassword)
 
+          switch genResult {
+          case .success:
+            let setupInfo = LockSetupInformation(
+              userName: userName, date: Date(), supervisorKey: supervisorKey, password: newPassword)
+
+            self.lockApi?.setLockKey(setupInformation: setupInfo) { resultKey in
+                DispatchQueue.main.async { // Crucial for stream events
+                    switch resultKey {
+                    case .success:
+                      // Setup successful, now proceed to lock
+                      print("Setup successful, now locking...")
+                      let keyGen = KeyGenerator()
+                      let keyRes = keyGen.generateKey(lockId: lock.id, password: newPassword)
+                      switch keyRes {
+                      case .success(let key):
+                        let info = LockActionInformation(userName: userName, date: Date(), key: key)
+                        self.lockApi?.lock(
+                          information: info,
+                          stream: { result in
+                            DispatchQueue.main.async { // Crucial for stream events
+                              switch result {
+                              case .success(let state):
+                                print("Locking Lock with ID: \(lock.id)")
+                                if case .charging(let chargeLevel) = state {
+                                  self.eventSink?(chargeLevel.percentage)
+                                } else if case .completed = state {
+                                  self.eventSink?(100.0)
+                                  self.eventSink?(FlutterEndOfEventStream)
+                                  self.eventSink = nil
+                                }
+                              case .failure(let err):
+                                self.eventSink?(
+                                  FlutterError(
+                                    code: "LOCK_FAILED", message: err.localizedDescription, details: nil))
+                                self.eventSink = nil
+                              }
+                            }
+                          })
+                      case .failure(let err):
+                        self.eventSink?(
+                          FlutterError(
+                            code: "KEY_GEN_FAILED_LOCK", message: err.localizedDescription, details: nil))
+                        self.eventSink = nil
+                      }
+                    case .failure(let err):
+                      self.eventSink?(
+                        FlutterError(
+                          code: "SET_KEY_FAILED", message: err.localizedDescription, details: nil))
+                      self.eventSink = nil
+                    }
+                }
+            }
+
+          case .failure(let err):
+            self.eventSink?(
+              FlutterError(code: "KEY_GEN_FAILED", message: err.localizedDescription, details: nil)
+            )
+            self.eventSink = nil
+          }
+
+        case .failure(let err):
+          self.eventSink?(
+            FlutterError(
+              code: "GET_LOCK_FAILED_SETUP", message: err.localizedDescription, details: nil)
+          )
+          self.eventSink = nil
+        }
+      }
+    }
+  }
   private func getLock(completion: @escaping (Result<Lock, Error>) -> Void) {
     let config = SmackConfig(logging: CombinedLogger(debugPrinter: DebugPrinter()))
     let client = SmackClient(config: config)
@@ -196,96 +287,105 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
     }
   }
 
-  private func unlockLock(userName: String, password: String) {
+private func unlockLock(userName: String, password: String) {
     getLock { [weak self] res in
       guard let self = self else { return }
-      switch res {
-      case .success(let lock):
-        self.eventSink?(lock.id)
+      DispatchQueue.main.async { // Ensure all eventSink calls are on the main thread
+        switch res {
+        case .success(let lock):
+          self.eventSink?(lock.id)
 
-        let keyGen = KeyGenerator()
-        let keyRes = keyGen.generateKey(lockId: lock.id, password: password)
+          let keyGen = KeyGenerator()
+          let keyRes = keyGen.generateKey(lockId: lock.id, password: password)
 
-        switch keyRes {
-        case .success(let key):
-          let info = LockActionInformation(userName: userName, date: Date(), key: key)
-          self.lockApi?.unlock(
-            information: info,
-            stream: { result in
-              switch result {
-              case .success(let state):
-                if case .charging(let chargeLevel) = state {
-                  self.eventSink?(chargeLevel.percentage)
-                } else if case .completed = state {
-                  self.eventSink?(100.0)
-                  self.eventSink?(FlutterEndOfEventStream)
-                  self.eventSink = nil
+          switch keyRes {
+          case .success(let key):
+            let info = LockActionInformation(userName: userName, date: Date(), key: key)
+            self.lockApi?.unlock(
+              information: info,
+              stream: { result in
+                DispatchQueue.main.async { // Crucial for stream events
+                  switch result {
+                  case .success(let state):
+                    if case .charging(let chargeLevel) = state {
+                      self.eventSink?(chargeLevel.percentage)
+                    } else if case .completed = state {
+                      self.eventSink?(100.0)
+                      self.eventSink?(FlutterEndOfEventStream)
+                      self.eventSink = nil
+                    }
+                  case .failure(let err):
+                    self.eventSink?(
+                      FlutterError(
+                        code: "UNLOCK_FAILED", message: err.localizedDescription, details: nil))
+                    self.eventSink = nil
+                  }
                 }
-              case .failure(let err):
-                self.eventSink?(
-                  FlutterError(
-                    code: "UNLOCK_FAILED", message: err.localizedDescription, details: nil))
-                self.eventSink = nil
-              }
-            })
+              })
+          case .failure(let err):
+            self.eventSink?(
+              FlutterError(
+                code: "KEY_GEN_FAILED_UNLOCK", message: err.localizedDescription, details: nil))
+            self.eventSink = nil
+          }
         case .failure(let err):
           self.eventSink?(
             FlutterError(
-              code: "KEY_GEN_FAILED_UNLOCK", message: err.localizedDescription, details: nil))
+              code: "GET_LOCK_FAILED_UNLOCK", message: err.localizedDescription, details: nil))
           self.eventSink = nil
         }
-      case .failure(let err):
-        self.eventSink?(
-          FlutterError(
-            code: "GET_LOCK_FAILED_UNLOCK", message: err.localizedDescription, details: nil))
-        self.eventSink = nil
       }
     }
   }
+  
   private func lockLock(userName: String, password: String) {
     getLock { [weak self] res in
       guard let self = self else { return }
-      switch res {
-      case .success(let lock):
-        self.eventSink?(lock.id)
-        let keyGen = KeyGenerator()
-        let keyRes = keyGen.generateKey(lockId: lock.id, password: password)
+      DispatchQueue.main.async { // Ensure all eventSink calls are on the main thread
+        switch res {
+        case .success(let lock):
+          self.eventSink?(lock.id)
+          let keyGen = KeyGenerator()
+          let keyRes = keyGen.generateKey(lockId: lock.id, password: password)
 
-        switch keyRes {
-        case .success(let key):
-          let info = LockActionInformation(userName: userName, date: Date(), key: key)
-          self.lockApi?.lock(
-            information: info,
-            stream: { result in
-              switch result {
-              case .success(let state):
-                print("Locking Lock with ID: \(lock.id)")
+          switch keyRes {
+          case .success(let key):
+            let info = LockActionInformation(userName: userName, date: Date(), key: key)
+            self.lockApi?.lock(
+              information: info,
+              stream: { result in
+                DispatchQueue.main.async { // Crucial for stream events
+                  switch result {
+                  case .success(let state):
+                    print("Locking Lock with ID: \(lock.id)")
 
-                if case .charging(let chargeLevel) = state {
-                  self.eventSink?(chargeLevel.percentage)
-                } else if case .completed = state {
-                  self.eventSink?(100.0)
-                  self.eventSink?(FlutterEndOfEventStream)
-                  self.eventSink = nil
+                    if case .charging(let chargeLevel) = state {
+                      self.eventSink?(chargeLevel.percentage)
+                    } else if case .completed = state {
+                      self.eventSink?(100.0)
+                      self.eventSink?(FlutterEndOfEventStream)
+                      self.eventSink = nil
+                    }
+                  case .failure(let err):
+                    self.eventSink?(
+                      FlutterError(code: "LOCK_FAILED", message: err.localizedDescription, details: nil)
+                    )
+                    self.eventSink = nil
+                  }
                 }
-              case .failure(let err):
-                self.eventSink?(
-                  FlutterError(code: "LOCK_FAILED", message: err.localizedDescription, details: nil)
-                )
-                self.eventSink = nil
-              }
-            })
+              })
+          case .failure(let err):
+            self.eventSink?(
+              FlutterError(
+                code: "KEY_GEN_FAILED_LOCK", message: err.localizedDescription, details: nil))
+            self.eventSink = nil
+          }
         case .failure(let err):
           self.eventSink?(
             FlutterError(
-              code: "KEY_GEN_FAILED_LOCK", message: err.localizedDescription, details: nil))
+              code: "GET_LOCK_FAILED_LOCK", message: err.localizedDescription, details: nil))
           self.eventSink = nil
         }
-      case .failure(let err):
-        self.eventSink?(
-          FlutterError(
-            code: "GET_LOCK_FAILED_LOCK", message: err.localizedDescription, details: nil))
-        self.eventSink = nil
       }
     }
   }
