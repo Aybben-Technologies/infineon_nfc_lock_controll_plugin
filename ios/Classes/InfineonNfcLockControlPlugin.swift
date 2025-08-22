@@ -134,9 +134,7 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
                 DispatchQueue.main.async {
                   switch result {
                   case .failure(let err):
-                    sink(
-                      FlutterError(
-                        code: "DUMMY_LOCK_FAILED", message: err.localizedDescription, details: nil))
+                   sink("DUMMY_LOCK_FAILED")
                   case .success:
                     break
                   }

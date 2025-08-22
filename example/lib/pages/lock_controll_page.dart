@@ -62,10 +62,13 @@ class _LockControlPageState extends State<LockControlPage> {
       });
       await for (final event in InfineonNfcLockControl.getLockId()) {
         if (event is String) {
-          setState(() {
-            _lockId = event;
-            _status = 'Lock ID received!';
-          });
+          if (event.contains("DUMMY_LOCK_FAILED")) {
+          } else {
+            setState(() {
+              _lockId = event;
+              _status = 'Lock ID received!';
+            });
+          }
         }
       }
     } catch (e) {
