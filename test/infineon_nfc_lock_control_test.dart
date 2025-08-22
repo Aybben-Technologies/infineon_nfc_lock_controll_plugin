@@ -58,10 +58,26 @@ void main() {
       expect(result, isTrue);
     });
 
+    testWidgets('getLockId stream emits a value and completes', (WidgetTester tester) async {
+      MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
+      InfineonNfcLockControlPlatform.instance = fakePlatform;
+
+      final lockIdValues = <String>[];
+      final stream = InfineonNfcLockControl.getLockId();
+
+      await for (final value in stream) {
+        if (value is String) {
+          lockIdValues.add(value);
+        }
+      }
+
+      expect(lockIdValues, equals(['12345']));
+    });
+
     testWidgets('unlockLockStream emits progress and completes successfully', (WidgetTester tester) async {
       MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
       InfineonNfcLockControlPlatform.instance = fakePlatform;
-      
+
       final progressValues = <double>[];
       final stream = InfineonNfcLockControl.unlockLockStream(
         userName: 'testUser',
@@ -69,7 +85,9 @@ void main() {
       );
 
       await for (final progress in stream) {
-        progressValues.add(progress);
+        if (progress is double) {
+          progressValues.add(progress);
+        }
       }
 
       expect(progressValues, equals([0.1, 0.5, 1.0]));
@@ -78,7 +96,7 @@ void main() {
     testWidgets('lockLockStream emits progress and completes successfully', (WidgetTester tester) async {
       MockInfineonNfcLockControlPlatform fakePlatform = MockInfineonNfcLockControlPlatform();
       InfineonNfcLockControlPlatform.instance = fakePlatform;
-      
+
       final progressValues = <double>[];
       final stream = InfineonNfcLockControl.lockLockStream(
         userName: 'testUser',
@@ -86,7 +104,9 @@ void main() {
       );
 
       await for (final progress in stream) {
-        progressValues.add(progress);
+        if (progress is double) {
+          progressValues.add(progress);
+        }
       }
 
       expect(progressValues, equals([0.1, 0.5, 1.0]));
@@ -107,6 +127,11 @@ class MockInfineonNfcLockControlPlatform
   Future<String?> getPlatformVersion() => Future.value(mockPlatformVersionResult);
 
   @override
+  Stream<dynamic> getLockId() async* {
+    yield '12345';
+  }
+
+  @override
   Future<bool> setupNewLock({
     required String userName,
     required String supervisorKey,
@@ -124,7 +149,7 @@ class MockInfineonNfcLockControlPlatform
   Future<bool> lockPresent() => Future.value(mockLockPresentResult);
 
   @override
-  Stream<double> lockLockStream({
+  Stream<dynamic> lockLockStream({
     required String userName,
     required String password,
   }) async* {
@@ -134,9 +159,9 @@ class MockInfineonNfcLockControlPlatform
     await Future.delayed(const Duration(milliseconds: 10));
     yield 1.0;
   }
-  
+
   @override
-  Stream<double> unlockLockStream({
+  Stream<dynamic> unlockLockStream({
     required String userName,
     required String password,
   }) async* {

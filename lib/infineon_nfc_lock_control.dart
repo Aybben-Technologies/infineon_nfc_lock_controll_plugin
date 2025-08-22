@@ -5,6 +5,10 @@ class InfineonNfcLockControl {
     return InfineonNfcLockControlPlatform.instance.getPlatformVersion();
   }
 
+  static Stream<dynamic> getLockId() {
+    return InfineonNfcLockControlPlatform.instance.getLockId();
+  }
+
   static Stream<dynamic> lockLockStream({
     required String userName,
     required String password,

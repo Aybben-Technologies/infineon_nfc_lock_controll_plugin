@@ -23,7 +23,7 @@ class _LockControlPageState extends State<LockControlPage> {
   String _status = '0%';
   double _progress = 0.0;
   bool _lockPresent = false;
-  int _lockId = 0;
+  String _lockId = 'Not detected';
   bool _userNameError = false;
   bool _supervisorKeyError = false;
   bool _changeSupervisorKeyError = false;
@@ -53,6 +53,27 @@ class _LockControlPageState extends State<LockControlPage> {
       _supervisorKeyError =
           supervisorKey && _supervisorKeyController.text.isEmpty;
     });
+  }
+
+  Future<void> _getLockId() async {
+    try {
+      setState(() {
+        _status = 'Getting lock ID...';
+      });
+      await for (final event in InfineonNfcLockControl.getLockId()) {
+        if (event is String) {
+          setState(() {
+            _lockId = event;
+            _status = 'Lock ID received!';
+          });
+        }
+      }
+    } catch (e) {
+      _animateErrorProgress(currentProgress: _progress);
+      setState(() {
+        _status = 'Error getting lock ID: ${e.toString()}';
+      });
+    }
   }
 
   Future<void> _checkLockPresence() async {
@@ -108,7 +129,7 @@ class _LockControlPageState extends State<LockControlPage> {
         userName: _userNameController.text,
         password: _passwordController.text,
       )) {
-        if (event is int) {
+        if (event is String) {
           setState(() {
             _lockId = event;
           });
@@ -154,7 +175,7 @@ class _LockControlPageState extends State<LockControlPage> {
         userName: _userNameController.text,
         password: _passwordController.text,
       )) {
-        if (event is int) {
+        if (event is String) {
           setState(() {
             _lockId = event;
           });
@@ -277,6 +298,11 @@ class _LockControlPageState extends State<LockControlPage> {
             Padding(
               padding: const EdgeInsets.only(top: 8.0),
               child: Text('Lock ID: $_lockId'),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _getLockId,
+              child: const Text('Get Lock ID'),
             ),
             const SizedBox(height: 8),
             ElevatedButton(

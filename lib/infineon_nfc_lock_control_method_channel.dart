@@ -19,6 +19,11 @@ class MethodChannelInfineonNfcLockControl
   }
 
   @override
+  Stream<dynamic> getLockId() {
+    return eventChannel.receiveBroadcastStream({'method': 'getLockId'});
+  }
+
+  @override
   Future<bool> setupNewLock({
     required String userName,
     required String supervisorKey,

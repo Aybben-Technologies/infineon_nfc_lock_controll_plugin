@@ -20,6 +20,10 @@ abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
     throw UnimplementedError('getPlatformVersion() has not been implemented.');
   }
 
+  Stream<dynamic> getLockId() {
+    throw UnimplementedError('getLockId() has not been implemented.');
+  }
+
   Stream<dynamic> lockLockStream({
     required String userName,
     required String password,
