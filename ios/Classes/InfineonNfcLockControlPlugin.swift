@@ -171,33 +171,13 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
         let genResult = keyGenerator.generateKey(lockId: lock.id, password: newPassword)
 
         switch genResult {
-        case .success(let key):
+        case .success:
           let setupInfo = LockSetupInformation(
             userName: userName, date: Date(), supervisorKey: supervisorKey, password: newPassword)
           self.lockApi?.setLockKey(setupInformation: setupInfo) { resultKey in
             switch resultKey {
-            case .success(let state):
-              if case .completed(let retrievedLockKey) = state {
-                let info = LockActionInformation(userName: userName, date: Date(), key: key)
-                self.lockApi?.unlock(information: info) { unlockResult in
-                  switch unlockResult {
-                  case .success:
-                    result(true)
-                  case .failure(let err):
-                    result(
-                      FlutterError(
-                        code: "UNLOCK_FAILED_AFTER_SETUP", message: err.localizedDescription,
-                        details: nil))
-                  }
-                }
-              } else {
-                result(
-                  FlutterError(
-                    code: "SET_KEY_NO_LOCKKEY",
-                    message: "Set lock key did not return completed state with LockKey",
-                    details: nil)
-                )
-              }
+            case .success:
+              result(true)
             case .failure(let err):
               result(
                 FlutterError(

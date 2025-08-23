@@ -103,6 +103,7 @@ class _LockControlPageState extends State<LockControlPage> {
         supervisorKey: _supervisorKeyController.text,
         newPassword: _newPasswordController.text,
       );
+
       setState(() {
         _status = success ? 'Lock setup successful!' : 'Lock setup failed.';
       });
