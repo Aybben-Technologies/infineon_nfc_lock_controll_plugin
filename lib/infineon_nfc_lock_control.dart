@@ -9,7 +9,7 @@ class InfineonNfcLockControl {
     return InfineonNfcLockControlPlatform.instance.getLockId();
   }
 
-  static Stream<dynamic> lockLockStream({
+  static Stream<double> lockLockStream({
     required String userName,
     required String password,
   }) {
@@ -19,7 +19,7 @@ class InfineonNfcLockControl {
     );
   }
 
-  static Stream<dynamic> unlockLockStream({
+  static Stream<double> unlockLockStream({
     required String userName,
     required String password,
   }) {

@@ -1,5 +1,6 @@
-import 'package:infineon_nfc_lock_control/infineon_nfc_lock_control_method_channel.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+
+import 'infineon_nfc_lock_control_method_channel.dart';
 
 abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
   InfineonNfcLockControlPlatform() : super(token: _token);
@@ -24,14 +25,14 @@ abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
     throw UnimplementedError('getLockId() has not been implemented.');
   }
 
-  Stream<dynamic> lockLockStream({
+  Stream<double> lockLockStream({
     required String userName,
     required String password,
   }) {
     throw UnimplementedError('lockLockStream() has not been implemented.');
   }
 
-  Stream<dynamic> unlockLockStream({
+  Stream<double> unlockLockStream({
     required String userName,
     required String password,
   }) {

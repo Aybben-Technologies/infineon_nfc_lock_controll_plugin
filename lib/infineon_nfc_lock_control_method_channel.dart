@@ -10,6 +10,7 @@ class MethodChannelInfineonNfcLockControl
   @visibleForTesting
   final methodChannel = const MethodChannel('infineon_nfc_lock_control');
 
+  // EventChannel for streaming lock/unlock progress
   @visibleForTesting
   final eventChannel = const EventChannel('infineon_nfc_lock_control_stream');
 
@@ -57,26 +58,30 @@ class MethodChannelInfineonNfcLockControl
   }
 
   @override
-  Stream<dynamic> unlockLockStream({
+  Stream<double> unlockLockStream({
     required String userName,
     required String password,
   }) {
-    return eventChannel.receiveBroadcastStream({
-      'method': 'unlockLock',
-      'userName': userName,
-      'password': password,
-    });
+    return eventChannel
+        .receiveBroadcastStream({
+          'method': 'unlockLock',
+          'userName': userName,
+          'password': password,
+        })
+        .map<double>((event) => event as double);
   }
 
   @override
-  Stream<dynamic> lockLockStream({
+  Stream<double> lockLockStream({
     required String userName,
     required String password,
   }) {
-    return eventChannel.receiveBroadcastStream({
-      'method': 'lockLock',
-      'userName': userName,
-      'password': password,
-    });
+    return eventChannel
+        .receiveBroadcastStream({
+          'method': 'lockLock',
+          'userName': userName,
+          'password': password,
+        })
+        .map<double>((event) => event as double);
   }
 }
