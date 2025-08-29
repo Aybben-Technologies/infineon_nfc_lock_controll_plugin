@@ -32,10 +32,12 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
@@ -306,6 +308,23 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         }
 
         when (method) {
+            "getLockId" -> {
+                currentViewModel.viewModelScope.launch {
+                    currentViewModel.getLockIdStream()
+                        .catch { e ->
+                            currentActivity?.runOnUiThread {
+                                events?.error("GET_LOCK_ID_FAILED", e.localizedMessage, null)
+                                events?.endOfStream()
+                            }
+                        }
+                        .collect { lockId ->
+                            currentActivity?.runOnUiThread {
+                                events?.success(lockId)
+                                events?.endOfStream()
+                            }
+                        }
+                }
+            }
             "unlockLock" -> {
                 unlockLockStream(userName, password, currentViewModel)
             }
@@ -388,6 +407,22 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
 
 class RegistrationViewModel(private val smackSdk: SmackSdk) : ViewModel() {
     val setupResult = MutableLiveData<Boolean>()
+    
+    fun getLockIdStream(): Flow<String> = flow {
+        smackSdk.mailboxApi
+            .mailbox
+            .retry { e -> e !is CancellationException }
+            .filterNotNull()
+            .take(1)
+            .collect { mailbox ->
+                try {
+                    val lockId = smackSdk.mailboxApi.getUid(mailbox)
+                    emit(lockId.toString())
+                } catch (e: Exception) {
+                    emit("DUMMY_LOCK_FAILED")
+                }
+            }
+    }
 
     fun setupNewLock(
             userName: String,
