@@ -2,10 +2,13 @@ import CommonCrypto
 import Flutter
 import SmackSDK
 import UIKit
+import CoreNFC
 
 public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var lockApi: LockApi?
   private var eventSink: FlutterEventSink?
+  private var client: SmackClient?
+  private var mailboxApi: MailboxApi?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let methodChannel = FlutterMethodChannel(
@@ -14,11 +17,11 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
       name: "infineon_nfc_lock_control_stream", binaryMessenger: registrar.messenger())
     let instance = InfineonNfcLockControlPlugin()
 
-    // Correctly initialize lockApi here, just once.
     let config = SmackConfig(logging: CombinedLogger(debugPrinter: DebugPrinter()))
-    let client = SmackClient(config: config)
-    let target = SmackTarget.device(client: client)
+    instance.client = SmackClient(config: config)
+    let target = SmackTarget.device(client: instance.client!)
     instance.lockApi = LockApi(target: target, config: config)
+    instance.mailboxApi = MailboxApi(target: target, config: config)
 
     registrar.addMethodCallDelegate(instance, channel: methodChannel)
     eventChannel.setStreamHandler(instance)
@@ -74,14 +77,14 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
 
     switch call.method {
     case "lockPresent":
-      getLock { lockResult in
-        switch lockResult {
-        case .success:
-          result(true)
-        case .failure:
-          result(false)
+        getLock { [weak self] lockResult in
+          switch lockResult {
+          case .success:
+            result(true)
+          case .failure:
+            result(false)
+          }
         }
-      }
     case "getPlatformVersion":
       result("iOS " + UIDevice.current.systemVersion)
     case "setupNewLock":
@@ -112,54 +115,60 @@ public class InfineonNfcLockControlPlugin: NSObject, FlutterPlugin, FlutterStrea
   }
 
   private func getLock(completion: @escaping (Result<Lock, Error>) -> Void) {
-    // Now you can just use the existing lockApi property
     lockApi?.getLock(cancelIfNotSetup: false) { result in
       completion(result)
     }
   }
 
   private func getLockId() {
-    getLock { [weak self] lockResult in
+    guard NFCNDEFReaderSession.readingAvailable else {
+      self.eventSink?(
+        FlutterError(
+          code: "NFC_UNAVAILABLE", message: "NFC is not available on this device.", details: nil))
+      return
+    }
+
+    self.eventSink?("DUMMY_LOCK_FAILED")
+
+    client?.connect(stream: { [weak self] result in
       guard let self = self, let sink = self.eventSink else { return }
-
-      DispatchQueue.main.async {
-        switch lockResult {
-        case .success(let lock):
-          sink(String(lock.id))
-
-          let dummyKeyGen = KeyGenerator()
-          let dummyKeyRes = dummyKeyGen.generateKey(lockId: lock.id, password: "bogus_password")
-          switch dummyKeyRes {
-          case .success(let key):
-            let info = LockActionInformation(userName: "dummy", date: Date(), key: key)
-            self.lockApi?.lock(
-              information: info,
-              stream: { result in
-                DispatchQueue.main.async {
-                  switch result {
-                  case .failure(let err):
-                    sink("DUMMY_LOCK_FAILED")
-                  case .success:
-                    break
-                  }
-                }
-              })
-          case .failure(let err):
-            sink(
-              FlutterError(
-                code: "DUMMY_KEY_GEN_FAILED", message: err.localizedDescription, details: nil))
+      switch result {
+      case .success(let connectionState):
+        switch connectionState {
+        case .connected:
+          self.mailboxApi?.getUid { result in
+            switch result {
+            case .success(let lockID):
+              DispatchQueue.main.async {
+                sink(String(lockID))
+                self.eventSink?(FlutterEndOfEventStream)
+              }
+            case .failure(let error):
+              DispatchQueue.main.async {
+                sink(
+                  FlutterError(
+                    code: "GET_LOCK_ID_FAILED", message: error.localizedDescription, details: nil))
+                self.eventSink?(FlutterEndOfEventStream)
+              }
+            }
+            self.client?.disconnect(reason: .success)
           }
-
-        case .failure(let err):
+        case .scanning:
+          break
+        case .connecting:
+          break
+        }
+      case .failure(let error):
+        DispatchQueue.main.async {
           sink(
             FlutterError(
-              code: "GET_LOCK_ID_FAILED", message: err.localizedDescription, details: nil)
-          )
+              code: "CONNECTION_FAILED", message: error.localizedDescription, details: nil))
+          self.client?.disconnect(reason: .error(message: error.localizedDescription))
+          self.eventSink?(FlutterEndOfEventStream)
         }
       }
-    }
+    })
   }
-
   private func setupNewLock(
     userName: String, supervisorKey: String, newPassword: String, result: @escaping FlutterResult
   ) {
