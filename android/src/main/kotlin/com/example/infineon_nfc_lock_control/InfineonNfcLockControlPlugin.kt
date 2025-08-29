@@ -342,77 +342,64 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         Log.d(TAG, "Event channel listener cancelled.")
     }
     
-   // In InfineonNfcLockControlPlugin.kt
-
-private fun lockLockStream(userName: String, password: String, viewModel: RegistrationViewModel) {
-    viewModel.viewModelScope.launch(Dispatchers.IO) {
-        try {
-            // Simulate progress updates from 0% to 90%
-            for (i in 0..90 step 10) {
-                delay(100)
+    private fun unlockLockStream(userName: String, password: String, viewModel: RegistrationViewModel) {
+        viewModel.viewModelScope.launch(Dispatchers.IO) {
+            try {
+                for (i in 0..90 step 10) {
+                    delay(100) 
+                    currentActivity?.runOnUiThread {
+                         eventSink?.success(i.toDouble())
+                    }
+                }
+                
+                // Perform the actual unlock operation
+                viewModel.unlockLock(userName, password) { success ->
+                    currentActivity?.runOnUiThread {
+                        if (success) {
+                            eventSink?.success(100.0) // Final completion value
+                        } else {
+                            eventSink?.error("UNLOCK_FAILED", "Failed to unlock lock.", null)
+                        }
+                        eventSink?.endOfStream() 
+                    }
+                }
+            } catch (e: Exception) {
                 currentActivity?.runOnUiThread {
-                     eventSink?.success(i.toDouble())
+                    eventSink?.error("UNLOCK_EXCEPTION", e.localizedMessage, null)
+                    eventSink?.endOfStream() 
                 }
-            }
-            
-            // Use a CompletableDeferred to wait for the result
-            val lockSuccess = CompletableDeferred<Boolean>()
-            
-            // Perform the actual lock operation
-            viewModel.lockLock(userName, password) { success ->
-                lockSuccess.complete(success)
-            }
-            
-            // Await the result of the lock operation
-            val isSuccess = lockSuccess.await()
-
-            currentActivity?.runOnUiThread {
-                if (isSuccess) {
-                    eventSink?.success(100.0) // Final completion value
-                } else {
-                    eventSink?.error("LOCK_FAILED", "Failed to lock lock.", null)
-                }
-                eventSink?.endOfStream()
-            }
-        } catch (e: Exception) {
-            currentActivity?.runOnUiThread {
-                eventSink?.error("LOCK_EXCEPTION", e.localizedMessage, null)
-                eventSink?.endOfStream()
             }
         }
     }
-}
 
-private fun unlockLockStream(userName: String, password: String, viewModel: RegistrationViewModel) {
-    viewModel.viewModelScope.launch(Dispatchers.IO) {
-        try {
-            for (i in 0..90 step 10) {
-                delay(100)
+    // Simulates a streaming progress update and then performs the lock operation.
+    private fun lockLockStream(userName: String, password: String, viewModel: RegistrationViewModel) {
+        viewModel.viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Simulate progress updates from 0% to 90%
+                for (i in 0..90 step 10) {
+                    delay(100) 
+                    currentActivity?.runOnUiThread {
+                         eventSink?.success(i.toDouble())
+                    }
+                }
+                
+                // Perform the actual lock operation
+                viewModel.lockLock(userName, password) { success ->
+                    currentActivity?.runOnUiThread {
+                        if (success) {
+                            eventSink?.success(100.0) 
+                        } else {
+                            eventSink?.error("LOCK_FAILED", "Failed to lock lock.", null)
+                        }
+                        eventSink?.endOfStream() 
+                    }
+                }
+            } catch (e: Exception) {
                 currentActivity?.runOnUiThread {
-                     eventSink?.success(i.toDouble())
+                    eventSink?.error("LOCK_EXCEPTION", e.localizedMessage, null)
+                    eventSink?.endOfStream() 
                 }
-            }
-            
-            val unlockSuccess = CompletableDeferred<Boolean>()
-            
-            viewModel.unlockLock(userName, password) { success ->
-                unlockSuccess.complete(success)
-            }
-            
-            val isSuccess = unlockSuccess.await()
-
-            currentActivity?.runOnUiThread {
-                if (isSuccess) {
-                    eventSink?.success(100.0)
-                } else {
-                    eventSink?.error("UNLOCK_FAILED", "Failed to unlock lock.", null)
-                }
-                eventSink?.endOfStream()
-            }
-        } catch (e: Exception) {
-            currentActivity?.runOnUiThread {
-                eventSink?.error("UNLOCK_EXCEPTION", e.localizedMessage, null)
-                eventSink?.endOfStream()
             }
         }
     }
