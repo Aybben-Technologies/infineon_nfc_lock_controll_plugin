@@ -343,62 +343,32 @@ class InfineonNfcLockControlPlugin : FlutterPlugin, MethodCallHandler, ActivityA
     }
     
     private fun unlockLockStream(userName: String, password: String, viewModel: RegistrationViewModel) {
-        viewModel.viewModelScope.launch(Dispatchers.IO) {
-            try {
-                for (i in 0..90 step 10) {
-                    delay(100) 
-                    currentActivity?.runOnUiThread {
-                         eventSink?.success(i.toDouble())
-                    }
-                }
-                
-                // Perform the actual unlock operation
-                viewModel.unlockLock(userName, password) { success ->
-                    currentActivity?.runOnUiThread {
-                        if (success) {
-                            eventSink?.success(100.0) // Final completion value
-                        } else {
-                            eventSink?.error("UNLOCK_FAILED", "Failed to unlock lock.", null)
-                        }
-                        eventSink?.endOfStream() 
-                    }
-                }
-            } catch (e: Exception) {
-                currentActivity?.runOnUiThread {
-                    eventSink?.error("UNLOCK_EXCEPTION", e.localizedMessage, null)
-                    eventSink?.endOfStream() 
+        viewModel.unlockLockWithCallback(userName, password) { progress ->
+            currentActivity?.runOnUiThread {
+                if (progress == 100.0) {
+                    eventSink?.success(100.0)
+                    eventSink?.endOfStream()
+                } else if (progress < 0) { // Using negative value to indicate error
+                    eventSink?.error("UNLOCK_FAILED", "Failed to unlock lock.", null)
+                    eventSink?.endOfStream()
+                } else {
+                    eventSink?.success(progress)
                 }
             }
         }
     }
 
-    // Simulates a streaming progress update and then performs the lock operation.
     private fun lockLockStream(userName: String, password: String, viewModel: RegistrationViewModel) {
-        viewModel.viewModelScope.launch(Dispatchers.IO) {
-            try {
-                // Simulate progress updates from 0% to 90%
-                for (i in 0..90 step 10) {
-                    delay(100) 
-                    currentActivity?.runOnUiThread {
-                         eventSink?.success(i.toDouble())
-                    }
-                }
-                
-                // Perform the actual lock operation
-                viewModel.lockLock(userName, password) { success ->
-                    currentActivity?.runOnUiThread {
-                        if (success) {
-                            eventSink?.success(100.0) 
-                        } else {
-                            eventSink?.error("LOCK_FAILED", "Failed to lock lock.", null)
-                        }
-                        eventSink?.endOfStream() 
-                    }
-                }
-            } catch (e: Exception) {
-                currentActivity?.runOnUiThread {
-                    eventSink?.error("LOCK_EXCEPTION", e.localizedMessage, null)
-                    eventSink?.endOfStream() 
+        viewModel.lockLockWithCallback(userName, password) { progress ->
+            currentActivity?.runOnUiThread {
+                if (progress == 100.0) {
+                    eventSink?.success(100.0)
+                    eventSink?.endOfStream()
+                } else if (progress < 0) { // Using negative value to indicate error
+                    eventSink?.error("LOCK_FAILED", "Failed to lock lock.", null)
+                    eventSink?.endOfStream()
+                } else {
+                    eventSink?.success(progress)
                 }
             }
         }
@@ -512,7 +482,84 @@ class RegistrationViewModel(private val smackSdk: SmackSdk) : ViewModel() {
             }
         }
     }
+ fun unlockLockWithCallback(userName: String, password: String, onProgress: (Double) -> Unit) {
+        viewModelScope.launch {
+            try {
+                // Simulate progress updates before the main operation
+                onProgress(5.0)
+                delay(200)
+                onProgress(15.0)
+                delay(200)
 
+                smackSdk.lockApi
+                    .getLock()
+                    .retry { e -> e !is CancellationException }
+                    .filterNotNull()
+                    .take(1)
+                    .collect { lock ->
+                        val timestamp = System.currentTimeMillis() / 1000
+                        val key = smackSdk.lockApi.validatePassword(
+                            lock, userName, timestamp, password
+                        )
+                        smackSdk.lockApi.initializeSession(
+                            lock, userName, timestamp, key,
+                        )
+
+                        // Acknowledge that session is initialized
+                        onProgress(50.0)
+
+                        smackSdk.lockApi.unlock(lock, key)
+
+                        // Operation successful
+                        onProgress(100.0)
+                    }
+            } catch (e: CancellationException) {
+                Log.d("CancellationException", "Unlock cancelled", e)
+                onProgress(-1.0) // Indicate failure
+            } catch (e: Exception) {
+                Log.e("RegistrationViewModel", "unlockLock failed", e)
+                onProgress(-1.0) // Indicate failure
+            }
+        }
+    }
+
+    fun lockLockWithCallback(userName: String, password: String, onProgress: (Double) -> Unit) {
+        viewModelScope.launch {
+            try {
+                // Simulate progress updates before the main operation
+                onProgress(5.0)
+                delay(200)
+                onProgress(15.0)
+                delay(200)
+
+                smackSdk.lockApi
+                    .getLock()
+                    .retry { e -> e !is CancellationException }
+                    .filterNotNull()
+                    .take(1)
+                    .collect { lock ->
+                        val timestamp = System.currentTimeMillis() / 1000
+                        val key = smackSdk.lockApi.validatePassword(
+                            lock, userName, timestamp, password
+                        )
+                        smackSdk.lockApi.initializeSession(lock, userName, timestamp, key)
+
+                        // Acknowledge that session is initialized
+                        onProgress(50.0)
+
+                        smackSdk.lockApi.lock(lock, key)
+
+                        // Operation successful
+                        onProgress(100.0)
+                    }
+            } catch (e: CancellationException) {
+                onProgress(-1.0) // Indicate failure
+            } catch (e: Exception) {
+                Log.e("RegistrationViewModel", "lock failed", e)
+                onProgress(-1.0) // Indicate failure
+            }
+        }
+    }
     fun unlockLock(userName: String, password: String, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
             try {
