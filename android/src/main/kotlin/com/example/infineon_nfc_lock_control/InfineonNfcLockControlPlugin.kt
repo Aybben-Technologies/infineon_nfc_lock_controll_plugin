@@ -438,32 +438,32 @@ class RegistrationViewModel(private val smackSdk: SmackSdk) : ViewModel() {
                         .filterNotNull()
                         .take(1)
                         .collect { lock ->
-                            val key =
-                                    if (lock.isNew) {
-                                        smackSdk.lockApi.setLockKey(
-                                                lock,
-                                                userName,
-                                                LocalDateTime.now().toEpochSecond(ZoneOffset.UTC),
-                                                supervisorKey,
-                                                newPassword
-                                        )
-                                    } else {
-                                        // New password is used to validate existing lock
-                                        smackSdk.lockApi.validatePassword(
-                                                lock,
-                                                userName,
-                                                System.currentTimeMillis() / 1000,
-                                                newPassword
-                                        )
-                                    }
+                            // val key =
+                            //         if (lock.isNew) {
+                            //             smackSdk.lockApi.setLockKey(
+                            //                     lock,
+                            //                     userName,
+                            //                     LocalDateTime.now().toEpochSecond(ZoneOffset.UTC),
+                            //                     supervisorKey,
+                            //                     newPassword
+                            //             )
+                            //         } else {
+                            //             // New password is used to validate existing lock
+                            //             smackSdk.lockApi.validatePassword(
+                            //                     lock,
+                            //                     userName,
+                            //                     System.currentTimeMillis() / 1000,
+                            //                     newPassword
+                            //             )
+                            //         }
                             // Initialize session and unlock with the obtained key
-                            smackSdk.lockApi.initializeSession(
-                                    lock,
-                                    userName,
-                                    System.currentTimeMillis() / 1000,
-                                    key
-                            )
-                            smackSdk.lockApi.unlock(lock, key)
+                            // smackSdk.lockApi.initializeSession(
+                            //         lock,
+                            //         userName,
+                            //         System.currentTimeMillis() / 1000,
+                            //         key
+                            // )
+                            // smackSdk.lockApi.unlock(lock, key)
 
                             // Emit success and abort further collection
                             onComplete(true)
