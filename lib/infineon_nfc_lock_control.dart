@@ -29,7 +29,8 @@ class InfineonNfcLockControl {
     );
   }
 
-  static Future<bool> setupNewLock({
+  // Now a stream-based method
+  static Stream<double> setupNewLock({
     required String userName,
     required String supervisorKey,
     required String newPassword,

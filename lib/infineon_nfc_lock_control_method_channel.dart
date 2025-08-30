@@ -10,7 +10,6 @@ class MethodChannelInfineonNfcLockControl
   @visibleForTesting
   final methodChannel = const MethodChannel('infineon_nfc_lock_control');
 
-  // EventChannel for streaming lock/unlock progress
   @visibleForTesting
   final eventChannel = const EventChannel('infineon_nfc_lock_control_stream');
 
@@ -24,18 +23,21 @@ class MethodChannelInfineonNfcLockControl
     return eventChannel.receiveBroadcastStream({'method': 'getLockId'});
   }
 
+  // Corrected implementation for setupNewLock
   @override
-  Future<bool> setupNewLock({
+  Stream<double> setupNewLock({
     required String userName,
     required String supervisorKey,
     required String newPassword,
-  }) async {
-    return await methodChannel.invokeMethod<bool>('setupNewLock', {
+  }) {
+    return eventChannel
+        .receiveBroadcastStream({
+          'method': 'setupNewLock',
           'userName': userName,
           'supervisorKey': supervisorKey,
           'newPassword': newPassword,
-        }) ??
-        false;
+        })
+        .map<double>((event) => event as double);
   }
 
   @override

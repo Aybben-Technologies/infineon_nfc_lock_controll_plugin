@@ -90,6 +90,7 @@ class _LockControlPageState extends State<LockControlPage> {
     }
   }
 
+  // Updated to use the new stream-based method for setup
   Future<void> _setupNewLock() async {
     _showValidationErrors(userName: true, supervisorKey: true);
     setState(() {
@@ -97,18 +98,39 @@ class _LockControlPageState extends State<LockControlPage> {
     });
     if (_userNameError || _supervisorKeyError || _newPasswordError) return;
 
+    bool success = false;
     try {
-      final success = await InfineonNfcLockControl.setupNewLock(
+      setState(() {
+        _status = 'Setting up lock...';
+        _progress = 0.0;
+      });
+
+      await for (var progress in InfineonNfcLockControl.setupNewLock(
         userName: _userNameController.text,
         supervisorKey: _supervisorKeyController.text,
         newPassword: _newPasswordController.text,
-      );
+      )) {
+        setState(() {
+          _progress = min(progress / 100, 1.0);
+          _status = 'Setting up: ${min(progress, 100.0).toStringAsFixed(0)}%';
+        });
+      }
 
-      setState(() {
-        _status = success ? 'Lock setup successful!' : 'Lock setup failed.';
-      });
+      success = true;
     } catch (e) {
       _animateErrorProgress(currentProgress: _progress);
+      setState(() {
+        _status = 'Lock setup failed with error: ${e.toString()}';
+      });
+    } finally {
+      if (success) {
+        setState(() {
+          _status = 'Lock setup successful!';
+          _progress = 0.0;
+        });
+      } else {
+        _animateErrorProgress(currentProgress: _progress);
+      }
     }
   }
 
@@ -139,6 +161,9 @@ class _LockControlPageState extends State<LockControlPage> {
       success = true;
     } catch (e) {
       _animateErrorProgress(currentProgress: _progress);
+      setState(() {
+        _status = 'Unlocking failed with error: ${e.toString()}';
+      });
     } finally {
       if (success) {
         setState(() {
@@ -146,7 +171,6 @@ class _LockControlPageState extends State<LockControlPage> {
           _progress = 0.0;
         });
       } else {
-        // Animate progress to 0% and reset status to '0%'
         _animateErrorProgress(currentProgress: _progress);
       }
     }
@@ -179,6 +203,9 @@ class _LockControlPageState extends State<LockControlPage> {
       success = true;
     } catch (e) {
       _animateErrorProgress(currentProgress: _progress);
+      setState(() {
+        _status = 'Locking failed with error: ${e.toString()}';
+      });
     } finally {
       if (success) {
         setState(() {
@@ -186,7 +213,6 @@ class _LockControlPageState extends State<LockControlPage> {
           _progress = 0.0;
         });
       } else {
-        // Animate progress to 0% and reset status to '0%'
         _animateErrorProgress(currentProgress: _progress);
       }
     }
@@ -219,6 +245,9 @@ class _LockControlPageState extends State<LockControlPage> {
       });
     } catch (e) {
       _animateErrorProgress(currentProgress: _progress);
+      setState(() {
+        _status = 'Change password failed with error: ${e.toString()}';
+      });
     }
   }
 

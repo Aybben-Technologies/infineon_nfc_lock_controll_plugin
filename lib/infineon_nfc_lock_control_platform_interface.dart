@@ -39,7 +39,8 @@ abstract class InfineonNfcLockControlPlatform extends PlatformInterface {
     throw UnimplementedError('unlockLockStream() has not been implemented.');
   }
 
-  Future<bool> setupNewLock({
+  // Changed to a stream to handle progress
+  Stream<double> setupNewLock({
     required String userName,
     required String supervisorKey,
     required String newPassword,
